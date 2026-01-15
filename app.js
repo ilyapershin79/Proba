@@ -16,661 +16,437 @@ const taskText = document.getElementById("task-text");
 const taskTargets = document.getElementById("task-targets");
 const message = document.getElementById("message");
 
-/* ====== СОСТОЯНИЕ ИГРЫ ====== */
-let gameMode = null; // 'words' или 'items'
+/* ====== СОСТОЯНИЕ ====== */
+let mode = null;
 let currentWord = "";
-let currentLetterIndex = 0;
+let currentIndex = 0;
 let currentCategory = null;
 let collectedItems = [];
 
-/* ====== AR СИСТЕМА ====== */
-let cameraStream = null;
-let deviceOrientation = { alpha: 0, beta: 90, gamma: 0 };
+/* ====== ГИРОСКОП ====== */
+let deviceGamma = 0; // Наклон влево/вправо (-90 до 90)
+let deviceBeta = 90; // Наклон вперед/назад (0 до 180)
+
+/* ====== ВИРТУАЛЬНЫЕ ОБЪЕКТЫ ====== */
 let virtualObjects = [];
-let objectElements = [];
 
-/* ====== УПРАВЛЕНИЕ ЭКРАНАМИ ====== */
-function showScreen(screenElement) {
-    document.querySelectorAll('.screen').forEach(screen => {
-        screen.classList.remove('active');
+/* ====== ЭКРАНЫ ====== */
+function showScreen(screen) {
+  [menuScreen, gameScreen, winScreen].forEach(s => s.classList.remove("active"));
+  screen.classList.add("active");
+}
+
+/* ====== КАМЕРА ====== */
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" },
+      audio: false
     });
-    screenElement.classList.add('active');
-}
-
-/* ====== КАМЕРА - ПОЛНЫЙ РАБОЧИЙ КОД ====== */
-async function initializeCamera() {
-    if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-        cameraStream = null;
-    }
-
-    try {
-        const constraints = {
-            video: {
-                facingMode: "environment",
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
-            },
-            audio: false
-        };
-
-        cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
-        camera.srcObject = cameraStream;
-
-        // Ждём загрузки видео
-        await new Promise((resolve) => {
-            camera.onloadedmetadata = () => {
-                camera.play();
-                resolve();
-            };
-        });
-
-        console.log("✅ Камера успешно запущена");
-        return true;
-    } catch (cameraError) {
-        console.error("❌ Ошибка камеры:", cameraError);
-
-        // Показываем сообщение об ошибке
-        let errorMessage = "Не удалось получить доступ к камере. ";
-        if (cameraError.name === 'NotAllowedError') {
-            errorMessage += "Разрешите доступ к камере в настройках браузера.";
-        } else if (cameraError.name === 'NotFoundError') {
-            errorMessage += "Камера не найдена на устройстве.";
-        } else if (cameraError.name === 'NotReadableError') {
-            errorMessage += "Камера используется другим приложением.";
-        } else {
-            errorMessage += "Неизвестная ошибка.";
-        }
-
-        alert(errorMessage);
-        return false;
-    }
-}
-
-/* ====== ГИРОСКОП - ПОЛНЫЙ РАБОЧИЙ КОД ====== */
-function initializeGyroscope() {
-    if (!window.DeviceOrientationEvent) {
-        console.warn("⚠️ Гироскоп не поддерживается браузером");
-        showMessage("Поворот телефона не поддерживается. Используйте пальцы для поиска.", "error");
-        return false;
-    }
-
-    // Запрашиваем разрешение на доступ к гироскопу (нужно для iOS)
-    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission()
-            .then(permissionState => {
-                if (permissionState === 'granted') {
-                    setupGyroscopeListeners();
-                } else {
-                    console.warn("❌ Разрешение на гироскоп не получено");
-                    showMessage("Разрешите доступ к гироскопу для поиска объектов", "error");
-                }
-            })
-            .catch(error => {
-                console.error("Ошибка запроса гироскопа:", error);
-            });
-    } else {
-        // Для Android и других браузеров
-        setupGyroscopeListeners();
-    }
-
+    camera.srcObject = stream;
+    console.log("Камера работает");
     return true;
+  } catch (err) {
+    console.error("Ошибка камеры:", err);
+    alert("Разрешите доступ к камере!");
+    return false;
+  }
 }
 
-function setupGyroscopeListeners() {
-    window.addEventListener('deviceorientation', handleDeviceOrientation, true);
-    console.log("✅ Гироскоп активирован");
+/* ====== ГИРОСКОП ====== */
+function startGyroscope() {
+  if (window.DeviceOrientationEvent) {
+    window.addEventListener("deviceorientation", (event) => {
+      deviceGamma = event.gamma || 0; // -90..90
+      deviceBeta = event.beta || 90;   // 0..180
+      updateObjectsPosition();
+    });
+    console.log("Гироскоп работает");
+  } else {
+    console.log("Гироскоп не поддерживается");
+    // Для теста на компьютере
+    deviceGamma = 0;
+    deviceBeta = 90;
+  }
 }
 
-function handleDeviceOrientation(event) {
-    deviceOrientation = {
-        alpha: event.alpha || 0,    // 0-360 градусов, вращение вокруг оси Z
-        beta: event.beta || 90,     // -180 до 180, наклон вперед/назад
-        gamma: event.gamma || 0     // -90 до 90, наклон влево/вправо
-    };
-
-    updateVirtualObjects();
+/* ====== СООБЩЕНИЯ ====== */
+function showMessage(text, type = "info") {
+  message.textContent = text;
+  message.className = type;
+  message.classList.add("show");
+  setTimeout(() => message.classList.remove("show"), 2000);
 }
 
 /* ====== ВИРТУАЛЬНЫЕ ОБЪЕКТЫ ====== */
 function createVirtualObjects(contents, correctIndex) {
-    clearVirtualObjects();
+  // Удаляем старые объекты
+  virtualObjects.forEach(obj => {
+    if (obj.element && obj.element.parentNode) {
+      obj.element.remove();
+    }
+  });
+  virtualObjects = [];
 
-    // Создаём 3 виртуальных объекта в разных местах
-    const objectPositions = [
-        { worldX: -3.0, worldY: 0.5, worldZ: 5.0 },   // Слева
-        { worldX: 0.0, worldY: 1.5, worldZ: 4.0 },    // По центру, выше
-        { worldX: 3.0, worldY: -0.5, worldZ: 6.0 }    // Справа, ниже
-    ];
+  // 3 разных места в виртуальном пространстве
+  const positions = [
+    { x: -3, y: 0, z: 5 },   // Слева
+    { x: 0, y: 2, z: 4 },    // По центру, выше
+    { x: 3, y: -1, z: 6 }    // Справа, ниже
+  ];
 
-    contents.forEach((content, index) => {
-        const virtualObject = {
-            id: `obj_${Date.now()}_${index}`,
-            content: content,
-            isCorrect: index === correctIndex,
-            position: objectPositions[index],
-            isVisible: false,
-            element: null,
-            screenX: 0,
-            screenY: 0
-        };
+  contents.forEach((content, index) => {
+    const obj = {
+      id: `obj_${Date.now()}_${index}`,
+      content: content,
+      isCorrect: index === correctIndex,
+      position: positions[index],
+      element: null,
+      isVisible: false
+    };
 
-        virtualObjects.push(virtualObject);
-        createObjectElement(virtualObject);
-    });
+    // Создаём DOM элемент
+    const element = document.createElement("div");
+    element.className = "ar-object";
+    element.textContent = content;
+    element.dataset.correct = obj.isCorrect;
+    element.dataset.id = obj.id;
 
-    // Первое обновление позиций
-    updateVirtualObjects();
-}
+    // Начально скрыт
+    element.style.opacity = "0";
+    element.style.transform = "scale(0)";
 
-function createObjectElement(virtualObject) {
-    const element = document.createElement('div');
-    element.id = virtualObject.id;
-    element.className = 'ar-object';
-    element.textContent = virtualObject.content;
-    element.dataset.correct = virtualObject.isCorrect;
-
-    // Начальное состояние - скрыт
-    element.style.opacity = '0';
-    element.style.transform = 'scale(0) rotate(180deg)';
-    element.style.pointerEvents = 'none';
-
-    // Анимация при наведении
-    element.addEventListener('mouseenter', () => {
-        if (element.classList.contains('visible')) {
-            element.classList.add('highlighted');
-        }
-    });
-
-    element.addEventListener('mouseleave', () => {
-        element.classList.remove('highlighted');
-    });
-
-    // Обработка клика
-    element.addEventListener('click', (event) => {
-        event.stopPropagation();
-        handleObjectClick(element, virtualObject.isCorrect);
-    });
-
-    // Для мобильных устройств
-    element.addEventListener('touchstart', (event) => {
-        event.preventDefault();
-        if (element.classList.contains('visible')) {
-            element.classList.add('highlighted');
-        }
-    });
-
-    element.addEventListener('touchend', (event) => {
-        event.preventDefault();
-        if (element.classList.contains('visible')) {
-            handleObjectClick(element, virtualObject.isCorrect);
-        }
+    // Клик
+    element.addEventListener("click", () => {
+      handleObjectClick(element, obj.isCorrect);
     });
 
     gameScreen.appendChild(element);
-    virtualObject.element = element;
-    objectElements.push({ element, virtualObject });
+    obj.element = element;
+    virtualObjects.push(obj);
+  });
+
+  updateObjectsPosition();
 }
 
-function updateVirtualObjects() {
-    virtualObjects.forEach((obj) => {
-        if (!obj.element) return;
+function updateObjectsPosition() {
+  virtualObjects.forEach(obj => {
+    if (!obj.element) return;
 
-        // Преобразуем мировые координаты в экранные с учётом поворота телефона
-        const screenCoords = worldToScreen(
-            obj.position.worldX,
-            obj.position.worldY,
-            obj.position.worldZ,
-            deviceOrientation.gamma,
-            deviceOrientation.beta
-        );
+    // Преобразуем мировые координаты в экранные с учётом гироскопа
+    const screenX = 50 + (obj.position.x * 10) - (deviceGamma * 0.8);
+    const screenY = 50 + (obj.position.y * 8) - ((deviceBeta - 90) * 0.8);
 
-        obj.screenX = screenCoords.x;
-        obj.screenY = screenCoords.y;
-
-        const isObjectVisible = screenCoords.isVisible;
-
-        if (isObjectVisible && !obj.isVisible) {
-            // Объект появляется в поле зрения
-            showObject(obj);
-        } else if (!isObjectVisible && obj.isVisible) {
-            // Объект уходит из поля зрения
-            hideObject(obj);
-        } else if (isObjectVisible && obj.isVisible) {
-            // Обновляем позицию видимого объекта
-            updateObjectPosition(obj);
-        }
-    });
-}
-
-function worldToScreen(worldX, worldY, worldZ, gamma, beta) {
-    // Упрощённое преобразование 3D координат в 2D экранные
-    const gammaRad = (gamma * Math.PI) / 180;
-    const betaRad = ((beta - 90) * Math.PI) / 180;
-
-    // Учитываем поворот устройства
-    const rotatedX = worldX * Math.cos(gammaRad) - worldZ * Math.sin(gammaRad);
-    const rotatedZ = worldX * Math.sin(gammaRad) + worldZ * Math.cos(gammaRad);
-    const rotatedY = worldY + Math.sin(betaRad) * 3;
-
-    // Проекция на экран
-    const fov = 60; // Поле зрения
-    const aspectRatio = window.innerWidth / window.innerHeight;
-
-    const screenX = 50 + (rotatedX / rotatedZ) * (fov / aspectRatio) * 100;
-    const screenY = 50 + (rotatedY / rotatedZ) * fov * 100;
-
-    // Проверяем, находится ли объект в поле зрения
+    // Объект виден если он в пределах экрана
     const isVisible =
-        rotatedZ > 0.5 && // Объект не слишком близко
-        screenX >= 10 && screenX <= 90 &&
-        screenY >= 15 && screenY <= 85;
+      screenX > 10 && screenX < 90 &&
+      screenY > 20 && screenY < 80;
 
-    return {
-        x: Math.max(10, Math.min(90, screenX)),
-        y: Math.max(15, Math.min(85, screenY)),
-        isVisible: isVisible
-    };
-}
+    // Проверяем, в центре ли экрана (для выделения)
+    const isInCenter =
+      Math.abs(screenX - 50) < 15 &&
+      Math.abs(screenY - 50) < 15;
 
-function showObject(virtualObject) {
-    virtualObject.isVisible = true;
-    const element = virtualObject.element;
+    if (isVisible && !obj.isVisible) {
+      // ПОЯВЛЕНИЕ объекта
+      obj.isVisible = true;
+      obj.element.style.transition = "opacity 0.5s, transform 0.5s, left 0.3s, top 0.3s";
+      obj.element.style.opacity = "1";
+      obj.element.style.transform = "scale(1)";
+      obj.element.classList.add("visible");
 
-    element.style.transition = 'opacity 0.6s ease, transform 0.6s ease, left 0.3s ease, top 0.3s ease';
-    element.style.opacity = '1';
-    element.style.transform = 'scale(1) rotate(0deg)';
-    element.style.pointerEvents = 'auto';
-    element.classList.add('visible');
+      obj.element.style.left = `${screenX}%`;
+      obj.element.style.top = `${screenY}%`;
 
-    updateObjectPosition(virtualObject);
+    } else if (!isVisible && obj.isVisible) {
+      // ИСЧЕЗНОВЕНИЕ объекта
+      obj.isVisible = false;
+      obj.element.style.transition = "opacity 0.3s, transform 0.3s";
+      obj.element.style.opacity = "0";
+      obj.element.style.transform = "scale(0)";
+      obj.element.classList.remove("visible", "highlighted");
+    } else if (isVisible && obj.isVisible) {
+      // Обновление позиции
+      obj.element.style.left = `${screenX}%`;
+      obj.element.style.top = `${screenY}%`;
+    }
 
-    // Задержка перед выделением
-    setTimeout(() => {
-        if (virtualObject.isVisible) {
-            element.classList.add('highlighted');
-        }
-    }, 300);
-}
-
-function hideObject(virtualObject) {
-    virtualObject.isVisible = false;
-    const element = virtualObject.element;
-
-    element.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
-    element.style.opacity = '0';
-    element.style.transform = 'scale(0) rotate(180deg)';
-    element.style.pointerEvents = 'none';
-    element.classList.remove('visible', 'highlighted');
-}
-
-function updateObjectPosition(virtualObject) {
-    const element = virtualObject.element;
-    element.style.left = `${virtualObject.screenX}%`;
-    element.style.top = `${virtualObject.screenY}%`;
+    // Выделение если объект в центре
+    if (isInCenter && obj.isVisible) {
+      obj.element.classList.add("highlighted");
+    } else {
+      obj.element.classList.remove("highlighted");
+    }
+  });
 }
 
 function handleObjectClick(element, isCorrect) {
-    if (!element.classList.contains('visible')) return;
+  if (!element.classList.contains("highlighted")) {
+    showMessage("Наведи объект в центр экрана!", "error");
+    return;
+  }
 
-    const rect = element.getBoundingClientRect();
+  if (isCorrect) {
+    // ПРАВИЛЬНО
+    showMessage("Верно! Молодец!", "success");
 
-    if (isCorrect) {
-        // ПРАВИЛЬНЫЙ ВЫБОР
-        playSuccessAnimation(element);
-        showMessage('Отлично! Правильно!', 'success');
+    // Анимация полёта к панели
+    const targetIndex = mode === "words" ? currentIndex : collectedItems.length;
+    const target = taskTargets.children[targetIndex];
 
-        const targetIndex = gameMode === 'words' ? currentLetterIndex : collectedItems.length;
-        const targetElement = taskTargets.children[targetIndex];
+    if (target) {
+      const targetRect = target.getBoundingClientRect();
+      const elementRect = element.getBoundingClientRect();
 
-        if (targetElement) {
-            animateObjectToTarget(element, targetElement);
-        }
-
-        setTimeout(() => {
-            if (element.parentNode) {
-                element.remove();
-            }
-            if (gameMode === 'words') {
-                processCorrectLetter();
-            } else {
-                processCorrectItem();
-            }
-        }, 1000);
-
-    } else {
-        // НЕПРАВИЛЬНЫЙ ВЫБОР
-        playErrorAnimation(element);
-        showMessage('Не та буква/предмет!', 'error');
-
-        element.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-        element.style.opacity = '0';
-        element.style.transform = 'scale(0) rotate(360deg)';
-
-        setTimeout(() => {
-            if (element.parentNode) {
-                element.remove();
-            }
-        }, 500);
+      element.style.transition = "transform 0.8s cubic-bezier(0.5, 0, 0.5, 1), opacity 0.8s";
+      element.style.transform = `translate(
+        ${targetRect.left + targetRect.width/2 - elementRect.left}px,
+        ${targetRect.top + targetRect.height/2 - elementRect.top}px
+      ) scale(0.1)`;
+      element.style.opacity = "0";
     }
-}
-
-function playSuccessAnimation(element) {
-    element.style.transition = 'all 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55)';
-    element.style.transform += ' scale(1.5)';
-    element.style.filter = 'brightness(1.5) drop-shadow(0 0 20px gold)';
-}
-
-function playErrorAnimation(element) {
-    element.style.transition = 'all 0.5s ease';
-    element.style.transform += ' rotate(180deg)';
-    element.style.filter = 'brightness(0.5)';
-}
-
-function animateObjectToTarget(sourceElement, targetElement) {
-    const sourceRect = sourceElement.getBoundingClientRect();
-    const targetRect = targetElement.getBoundingClientRect();
-
-    const deltaX = targetRect.left + targetRect.width / 2 - sourceRect.left;
-    const deltaY = targetRect.top + targetRect.height / 2 - sourceRect.top;
-
-    sourceElement.style.zIndex = '1000';
-    sourceElement.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0.2)`;
-    sourceElement.style.opacity = '0.5';
-}
-
-/* ====== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====== */
-function showMessage(text, type = 'info') {
-    message.textContent = text;
-    message.className = type;
-    message.classList.add('show');
 
     setTimeout(() => {
-        message.classList.remove('show');
-    }, 2000);
-}
+      if (element.parentNode) {
+        element.remove();
+      }
+      if (mode === "words") {
+        handleCorrectLetter();
+      } else {
+        handleCorrectItem();
+      }
+    }, 800);
 
-function clearVirtualObjects() {
-    virtualObjects.forEach(obj => {
-        if (obj.element && obj.element.parentNode) {
-            obj.element.remove();
-        }
-    });
-    virtualObjects = [];
-    objectElements = [];
+  } else {
+    // НЕПРАВИЛЬНО
+    showMessage("Это не то, что нужно!", "error");
+
+    element.style.transition = "transform 0.5s, opacity 0.5s";
+    element.style.transform = "scale(0) rotate(180deg)";
+    element.style.opacity = "0";
+
+    setTimeout(() => {
+      if (element.parentNode) {
+        element.remove();
+      }
+    }, 500);
+  }
 }
 
 /* ====== РЕЖИМ "СЛОВА" ====== */
 function startWordsGame() {
-    gameMode = 'words';
-    currentWord = WORDS[Math.floor(Math.random() * WORDS.length)];
-    currentLetterIndex = 0;
+  mode = "words";
+  currentWord = WORDS[Math.floor(Math.random() * WORDS.length)];
+  currentIndex = 0;
 
-    // МАЛЕНЬКАЯ ПАНЕЛЬ ЗАДАНИЯ
-    taskText.textContent = `Собери слово:`;
-    taskText.style.fontSize = '18px';
-    taskText.style.marginBottom = '5px';
-    taskText.style.padding = '0';
+  // МАЛЕНЬКАЯ ПАНЕЛЬ ЗАДАНИЯ
+  taskText.textContent = `Собери слово:`;
+  taskText.style.fontSize = "18px";
+  taskText.style.marginBottom = "5px";
 
-    taskTargets.innerHTML = '';
-    for (let i = 0; i < currentWord.length; i++) {
-        const letterSpan = document.createElement('span');
-        letterSpan.className = 'target-item';
-        letterSpan.textContent = currentWord[i];
-        letterSpan.title = `Буква ${currentWord[i]}`;
-        letterSpan.style.fontSize = '24px';
-        letterSpan.style.width = '35px';
-        letterSpan.style.height = '35px';
-        taskTargets.appendChild(letterSpan);
-    }
+  taskTargets.innerHTML = "";
+  for (let i = 0; i < currentWord.length; i++) {
+    const span = document.createElement("span");
+    span.className = "target-item";
+    span.textContent = currentWord[i];
+    span.style.fontSize = "24px";
+    taskTargets.appendChild(span);
+  }
 
-    showMessage(`Ищи букву "${currentWord[0]}"! Поворачивай телефон`, 'info');
-    generateLetterObjects();
+  spawnLetterObjects();
 }
 
-function generateLetterObjects() {
-    const neededLetter = currentWord[currentLetterIndex];
+function spawnLetterObjects() {
+  const correctLetter = currentWord[currentIndex];
 
-    // Создаём массив из 3 разных букв
-    const lettersArray = [neededLetter];
-    while (lettersArray.length < 3) {
-        const randomLetter = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
-        if (!lettersArray.includes(randomLetter)) {
-            lettersArray.push(randomLetter);
-        }
+  // 3 разные буквы
+  const letters = [correctLetter];
+  while (letters.length < 3) {
+    const randomLetter = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+    if (!letters.includes(randomLetter)) {
+      letters.push(randomLetter);
     }
+  }
 
-    // Перемешиваем буквы
-    lettersArray.sort(() => Math.random() - 0.5);
+  // Перемешиваем
+  letters.sort(() => Math.random() - 0.5);
 
-    // Находим индекс правильной буквы
-    const correctIndex = lettersArray.findIndex(letter => letter === neededLetter);
+  // Находим индекс правильной буквы
+  const correctIndex = letters.findIndex(l => l === correctLetter);
 
-    // Создаём виртуальные объекты
-    createVirtualObjects(lettersArray, correctIndex);
+  // Создаём виртуальные объекты
+  createVirtualObjects(letters, correctIndex);
+
+  showMessage(`Ищи букву "${correctLetter}"! Крути телефон во все стороны`, "info");
 }
 
-function processCorrectLetter() {
-    const targetElements = taskTargets.querySelectorAll('.target-item');
-    if (targetElements[currentLetterIndex]) {
-        targetElements[currentLetterIndex].classList.add('found');
-    }
+function handleCorrectLetter() {
+  const targetItems = document.querySelectorAll(".target-item");
+  if (targetItems[currentIndex]) {
+    targetItems[currentIndex].classList.add("found");
+  }
 
-    currentLetterIndex++;
+  currentIndex++;
 
-    if (currentLetterIndex >= currentWord.length) {
-        // Слово собрано!
-        showMessage('Ура! Слово собрано!', 'success');
-        setTimeout(() => {
-            showScreen(winScreen);
-        }, 1500);
-    } else {
-        // Переходим к следующей букве
-        setTimeout(() => {
-            generateLetterObjects();
-            showMessage(`Теперь ищи букву "${currentWord[currentLetterIndex]}"`, 'info');
-        }, 800);
-    }
+  if (currentIndex >= currentWord.length) {
+    // Слово собрано
+    setTimeout(() => {
+      showScreen(winScreen);
+    }, 1000);
+  } else {
+    // Следующая буква
+    setTimeout(() => {
+      spawnLetterObjects();
+      showMessage(`Теперь ищи букву "${currentWord[currentIndex]}"`, "info");
+    }, 500);
+  }
 }
 
 /* ====== РЕЖИМ "ПРЕДМЕТЫ" ====== */
 function startItemsGame() {
-    gameMode = 'items';
-    currentCategory = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
-    collectedItems = [];
+  mode = "items";
+  currentCategory = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
+  collectedItems = [];
 
-    // МАЛЕНЬКАЯ ПАНЕЛЬ ЗАДАНИЯ
-    taskText.textContent = currentCategory.question;
-    taskText.style.fontSize = '18px';
-    taskText.style.marginBottom = '5px';
-    taskText.style.padding = '0';
+  // ПАНЕЛЬ ЗАДАНИЯ С ВОПРОСОМ
+  taskText.textContent = currentCategory.question;
+  taskText.style.fontSize = "18px";
+  taskText.style.marginBottom = "5px";
 
-    taskTargets.innerHTML = '';
-    currentCategory.items.forEach(item => {
-        const itemSpan = document.createElement('span');
-        itemSpan.className = 'target-item';
-        itemSpan.textContent = item.emoji;
-        itemSpan.title = item.name;
-        itemSpan.style.fontSize = '24px';
-        itemSpan.style.width = '35px';
-        itemSpan.style.height = '35px';
-        taskTargets.appendChild(itemSpan);
+  taskTargets.innerHTML = "";
+  currentCategory.items.forEach(item => {
+    const span = document.createElement("span");
+    span.className = "target-item";
+    span.textContent = item.emoji;
+    span.style.fontSize = "24px";
+    taskTargets.appendChild(span);
+  });
+
+  spawnItemObjects();
+}
+
+function spawnItemObjects() {
+  const neededItems = currentCategory.items.filter(item =>
+    !collectedItems.some(collected => collected.name === item.name)
+  );
+
+  if (neededItems.length === 0) return;
+
+  const correctItem = neededItems[0];
+  const items = [correctItem];
+  const allItems = [];
+
+  CATEGORIES.forEach(cat => {
+    cat.items.forEach(item => {
+      if (!items.some(i => i.name === item.name)) {
+        allItems.push(item);
+      }
     });
+  });
 
-    showMessage(`Ищи ${currentCategory.items[0].name.toLowerCase()}! Поворачивай телефон`, 'info');
-    generateItemObjects();
+  while (items.length < 3 && allItems.length > 0) {
+    const randomIndex = Math.floor(Math.random() * allItems.length);
+    const randomItem = allItems[randomIndex];
+    if (!items.some(i => i.name === randomItem.name)) {
+      items.push(randomItem);
+    }
+  }
+
+  items.sort(() => Math.random() - 0.5);
+
+  const contents = items.map(item => item.emoji);
+  const correctIndex = items.findIndex(item => item.name === correctItem.name);
+
+  createVirtualObjects(contents, correctIndex);
+  showMessage(`Ищи ${correctItem.name.toLowerCase()}! Крути телефон`, "info");
 }
 
-function generateItemObjects() {
-    const neededItems = currentCategory.items.filter(item =>
-        !collectedItems.some(collected => collected.name === item.name)
-    );
+function handleCorrectItem() {
+  const neededItems = currentCategory.items.filter(item =>
+    !collectedItems.some(collected => collected.name === item.name)
+  );
 
-    if (neededItems.length === 0) return;
+  if (neededItems.length === 0) return;
 
-    const targetItem = neededItems[0];
-    const itemsArray = [targetItem];
+  const correctItem = neededItems[0];
+  collectedItems.push(correctItem);
 
-    // Собираем случайные предметы из других категорий
-    const allItems = [];
-    CATEGORIES.forEach(category => {
-        category.items.forEach(item => {
-            if (!itemsArray.some(i => i.name === item.name)) {
-                allItems.push(item);
-            }
-        });
-    });
+  const targetItems = document.querySelectorAll(".target-item");
+  const itemIndex = currentCategory.items.findIndex(item => item.name === correctItem.name);
+  if (targetItems[itemIndex]) {
+    targetItems[itemIndex].classList.add("found");
+  }
 
-    // Добавляем случайные предметы пока не наберём 3
-    while (itemsArray.length < 3 && allItems.length > 0) {
-        const randomIndex = Math.floor(Math.random() * allItems.length);
-        const randomItem = allItems[randomIndex];
-
-        if (!itemsArray.some(item => item.name === randomItem.name)) {
-            itemsArray.push(randomItem);
-            allItems.splice(randomIndex, 1);
-        }
-    }
-
-    // Перемешиваем
-    itemsArray.sort(() => Math.random() - 0.5);
-
-    // Находим индекс правильного предмета
-    const correctIndex = itemsArray.findIndex(item => item.name === targetItem.name);
-    const emojiArray = itemsArray.map(item => item.emoji);
-
-    // Создаём виртуальные объекты
-    createVirtualObjects(emojiArray, correctIndex);
-}
-
-function processCorrectItem() {
-    const neededItems = currentCategory.items.filter(item =>
-        !collectedItems.some(collected => collected.name === item.name)
-    );
-
-    if (neededItems.length === 0) return;
-
-    const foundItem = neededItems[0];
-    collectedItems.push(foundItem);
-
-    const targetElements = taskTargets.querySelectorAll('.target-item');
-    const itemIndex = currentCategory.items.findIndex(item => item.name === foundItem.name);
-
-    if (targetElements[itemIndex]) {
-        targetElements[itemIndex].classList.add('found');
-    }
-
-    if (collectedItems.length === currentCategory.items.length) {
-        // Все предметы собраны!
-        showMessage('Все предметы найдены! Молодец!', 'success');
-        setTimeout(() => {
-            showScreen(winScreen);
-        }, 1500);
-    } else {
-        // Ищем следующий предмет
-        setTimeout(() => {
-            generateItemObjects();
-            const nextItem = currentCategory.items.find(item =>
-                !collectedItems.some(collected => collected.name === item.name)
-            );
-            if (nextItem) {
-                showMessage(`Теперь ищи ${nextItem.name.toLowerCase()}`, 'info');
-            }
-        }, 800);
-    }
-}
-
-/* ====== ОБРАБОТЧИКИ СОБЫТИЙ ====== */
-wordsBtn.addEventListener('click', async () => {
-    showScreen(gameScreen);
-
-    // Запускаем камеру
-    const cameraStarted = await initializeCamera();
-    if (!cameraStarted) return;
-
-    // Запускаем гироскоп
-    initializeGyroscope();
-
-    // Запускаем игру
+  if (collectedItems.length === currentCategory.items.length) {
     setTimeout(() => {
-        startWordsGame();
-    }, 500);
-});
-
-itemsBtn.addEventListener('click', async () => {
-    showScreen(gameScreen);
-
-    const cameraStarted = await initializeCamera();
-    if (!cameraStarted) return;
-
-    initializeGyroscope();
-
+      showScreen(winScreen);
+    }, 1000);
+  } else {
     setTimeout(() => {
-        startItemsGame();
+      spawnItemObjects();
+      const nextItem = currentCategory.items.find(item =>
+        !collectedItems.some(collected => collected.name === item.name)
+      );
+      if (nextItem) {
+        showMessage(`Теперь ищи ${nextItem.name.toLowerCase()}`, "info");
+      }
     }, 500);
-});
-
-homeBtn.addEventListener('click', () => {
-    showScreen(menuScreen);
-    clearVirtualObjects();
-
-    if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-        cameraStream = null;
-    }
-});
-
-playAgainBtn.addEventListener('click', () => {
-    showScreen(gameScreen);
-    if (gameMode === 'words') {
-        startWordsGame();
-    } else if (gameMode === 'items') {
-        startItemsGame();
-    }
-});
-
-backMenuBtn.addEventListener('click', () => {
-    showScreen(menuScreen);
-    clearVirtualObjects();
-
-    if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-        cameraStream = null;
-    }
-});
-
-/* ====== ИНИЦИАЛИЗАЦИЯ ====== */
-console.log('🚀 AR игра "Слова и предметы" загружена и готова к работе!');
-
-// Добавляем обработчик для тестирования на десктопе
-if (!window.DeviceOrientationEvent) {
-    console.log('Десктоп: эмулируем поворот телефона клавишами');
-
-    let simulatedGamma = 0;
-    let simulatedBeta = 90;
-
-    document.addEventListener('keydown', (event) => {
-        switch(event.key) {
-            case 'ArrowLeft':
-                simulatedGamma = Math.max(-90, simulatedGamma - 5);
-                deviceOrientation.gamma = simulatedGamma;
-                updateVirtualObjects();
-                break;
-            case 'ArrowRight':
-                simulatedGamma = Math.min(90, simulatedGamma + 5);
-                deviceOrientation.gamma = simulatedGamma;
-                updateVirtualObjects();
-                break;
-            case 'ArrowUp':
-                simulatedBeta = Math.max(0, simulatedBeta - 5);
-                deviceOrientation.beta = simulatedBeta;
-                updateVirtualObjects();
-                break;
-            case 'ArrowDown':
-                simulatedBeta = Math.min(180, simulatedBeta + 5);
-                deviceOrientation.beta = simulatedBeta;
-                updateVirtualObjects();
-                break;
-        }
-    });
+  }
 }
+
+/* ====== КНОПКИ ====== */
+wordsBtn.addEventListener("click", async () => {
+  showScreen(gameScreen);
+  const cameraOk = await startCamera();
+  if (cameraOk) {
+    startGyroscope();
+    setTimeout(() => startWordsGame(), 300);
+  }
+});
+
+itemsBtn.addEventListener("click", async () => {
+  showScreen(gameScreen);
+  const cameraOk = await startCamera();
+  if (cameraOk) {
+    startGyroscope();
+    setTimeout(() => startItemsGame(), 300);
+  }
+});
+
+// Кнопка домой ВНИЗУ
+homeBtn.addEventListener("click", () => {
+  showScreen(menuScreen);
+  virtualObjects.forEach(obj => {
+    if (obj.element && obj.element.parentNode) {
+      obj.element.remove();
+    }
+  });
+  virtualObjects = [];
+
+  if (camera.srcObject) {
+    camera.srcObject.getTracks().forEach(track => track.stop());
+  }
+});
+
+playAgainBtn.addEventListener("click", () => {
+  showScreen(gameScreen);
+  if (mode === "words") startWordsGame();
+  if (mode === "items") startItemsGame();
+});
+
+backMenuBtn.addEventListener("click", () => {
+  showScreen(menuScreen);
+  virtualObjects.forEach(obj => {
+    if (obj.element && obj.element.parentNode) {
+      obj.element.remove();
+    }
+  });
+  virtualObjects = [];
+
+  if (camera.srcObject) {
+    camera.srcObject.getTracks().forEach(track => track.stop());
+  }
+});
+
+/* ====== ЗАПУСК ====== */
+console.log("AR игра 'Слова и предметы' загружена");
