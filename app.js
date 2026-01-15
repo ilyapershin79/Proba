@@ -17,6 +17,7 @@ const taskTargets = document.getElementById("task-targets");
 const message = document.getElementById("message");
 const arContainer = document.getElementById("ar-container");
 const effectsContainer = document.getElementById("effects-container");
+const compass = document.querySelector(".compass-text");
 
 const soundCorrect = document.getElementById("sound-correct");
 const soundWrong = document.getElementById("sound-wrong");
@@ -29,54 +30,26 @@ let currentIndex = 0;
 let currentCategory = null;
 let collectedItems = [];
 let currentObjects = [];
-let deviceOrientation = { alpha: 0, beta: 0, gamma: 0 };
-let gameActive = false;
+let searchAngle = 0;
 
 /* ====== ЭКРАНЫ ====== */
 function showScreen(screen) {
   [menuScreen, gameScreen, winScreen].forEach(s => s.classList.remove("active"));
   screen.classList.add("active");
-
-  if (screen === gameScreen) {
-    gameActive = true;
-    startGameLoop();
-  } else {
-    gameActive = false;
-  }
 }
 
 /* ====== КАМЕРА ====== */
 async function startCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: "environment",
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      },
+      video: { facingMode: "environment" },
       audio: false
     });
     camera.srcObject = stream;
   } catch (e) {
-    console.error("Ошибка камеры:", e);
-    alert("Не удалось запустить камеру. Разрешите доступ к камере.");
-  }
-}
-
-/* ====== ОРИЕНТАЦИЯ УСТРОЙСТВА ====== */
-function initDeviceOrientation() {
-  if (window.DeviceOrientationEvent) {
-    window.addEventListener('deviceorientation', (event) => {
-      deviceOrientation = {
-        alpha: event.alpha || 0,  // поворот вокруг Z (0-360)
-        beta: event.beta || 0,    // наклон вперед/назад (-180 to 180)
-        gamma: event.gamma || 0   // наклон влево/вправо (-90 to 90)
-      };
-    });
-  } else {
-    console.warn("Device orientation не поддерживается");
-    // Эмуляция для десктопа
-    deviceOrientation = { alpha: 0, beta: 0, gamma: 0 };
+    console.log("Камера не работает, используем фон");
+    camera.style.display = "none";
+    gameScreen.style.background = "linear-gradient(135deg, #1a2980, #26d0ce)";
   }
 }
 
@@ -95,9 +68,9 @@ function showMessage(text, type = "info") {
 function playSound(soundElement) {
   try {
     soundElement.currentTime = 0;
-    soundElement.play().catch(e => console.log("Звук не воспроизведён:", e));
+    soundElement.play().catch(e => console.log("Звук не воспроизведён"));
   } catch (e) {
-    console.log("Ошибка воспроизведения звука:", e);
+    console.log("Ошибка звука");
   }
 }
 
@@ -109,7 +82,6 @@ function createParticles(x, y, color = "#ffd700", count = 15) {
     particle.style.left = x + "px";
     particle.style.top = y + "px";
 
-    // Случайное направление
     const angle = Math.random() * Math.PI * 2;
     const distance = 50 + Math.random() * 100;
     const tx = Math.cos(angle) * distance;
@@ -121,9 +93,7 @@ function createParticles(x, y, color = "#ffd700", count = 15) {
     effectsContainer.appendChild(particle);
 
     setTimeout(() => {
-      if (particle.parentNode) {
-        particle.remove();
-      }
+      if (particle.parentNode) particle.remove();
     }, 1000);
   }
 }
@@ -133,110 +103,95 @@ function clearARObjects() {
   currentObjects = [];
 }
 
-/* ====== ПОЗИЦИОНИРОВАНИЕ В ПРОСТРАНСТВЕ ====== */
-function getRandomPositionInSpace() {
-  // Глубина (Z-координата) - дальше от пользователя
-  const z = 5 + Math.random() * 10;
+/* ====== ПРОСТАЯ СИМУЛЯЦИЯ ДВИЖЕНИЯ ====== */
+function simulateMovement() {
+  searchAngle += 0.5;
+  const x = Math.sin(searchAngle * Math.PI / 180) * 30;
+  compass.textContent = `Ищи! Поверни телефон ${x > 0 ? 'вправо' : 'влево'}`;
 
-  // Угол обзора (горизонтальный)
-  const angle = Math.random() * Math.PI * 2;
+  // Обновляем видимость объектов в зависимости от "угла"
+  currentObjects.forEach((obj, index) => {
+    const objAngle = (index * 120 + searchAngle) % 360;
+    const isVisible = Math.abs(objAngle - 180) < 60;
 
-  // Расстояние от центра (X, Y)
-  const radius = 2 + Math.random() * 4;
-  const x = Math.cos(angle) * radius;
-  const y = (Math.random() - 0.5) * 3; // Вертикальное положение
+    if (isVisible && !obj.element.classList.contains("visible")) {
+      // Появление объекта с анимацией
+      obj.element.style.opacity = "0";
+      obj.element.classList.add("visible");
+      obj.element.style.transform = "scale(0)";
 
-  return { x, y, z };
+      setTimeout(() => {
+        obj.element.style.transition = "opacity 0.5s, transform 0.5s";
+        obj.element.style.opacity = "1";
+        obj.element.style.transform = "scale(1)";
+      }, 50);
+
+    } else if (!isVisible && obj.element.classList.contains("visible")) {
+      // Скрытие объекта
+      obj.element.style.opacity = "0";
+      obj.element.classList.remove("visible");
+    }
+  });
 }
 
-function calculateScreenPosition(worldPos) {
-  // Простая проекция 3D -> 2D
-  const fov = 60; // Поле зрения
-  const aspect = window.innerWidth / window.innerHeight;
-
-  // Учитываем ориентацию устройства
-  const tiltX = deviceOrientation.gamma / 90; // -1 to 1
-  const tiltY = deviceOrientation.beta / 90;  // -1 to 1
-  const rotation = deviceOrientation.alpha / 360; // 0 to 1
-
-  // Корректируем позицию с учётом наклона устройства
-  const adjustedX = worldPos.x + tiltX * 2;
-  const adjustedY = worldPos.y + tiltY * 2;
-
-  // Проекция на экран
-  const screenX = (adjustedX / worldPos.z) * (fov / aspect) * 100 + 50;
-  const screenY = (adjustedY / worldPos.z) * fov * 100 + 50;
-
-  return {
-    x: Math.min(Math.max(screenX, 10), 90), // Ограничиваем краями экрана
-    y: Math.min(Math.max(screenY, 20), 80)
-  };
-}
-
-/* ====== СОЗДАНИЕ AR ОБЪЕКТОВ ====== */
-function createARObject(content, isCorrect, worldPosition) {
+/* ====== СОЗДАНИЕ ОБЪЕКТОВ ====== */
+function createARObject(content, isCorrect, positionIndex) {
   const obj = document.createElement("div");
   obj.className = "ar-object";
   obj.textContent = content;
   obj.dataset.correct = isCorrect;
-  obj.dataset.worldPos = JSON.stringify(worldPosition);
 
-  // Позиционируем
-  updateObjectPosition(obj, worldPosition);
+  // Позиция по кругу (симуляция пространства)
+  const angle = positionIndex * 120; // 3 объекта по кругу
+  const radius = 150;
+  const centerX = window.innerWidth / 2;
+  const centerY = window.innerHeight / 2;
 
-  // Клик на объект
-  obj.addEventListener("click", () => handleObjectClick(obj, isCorrect));
+  const x = centerX + Math.cos(angle * Math.PI / 180) * radius - 50;
+  const y = centerY + Math.sin(angle * Math.PI / 180) * radius - 50;
 
-  // Наведение на объект
+  obj.style.left = x + "px";
+  obj.style.top = y + "px";
+  obj.style.opacity = "0";
+
+  // Клик
+  obj.addEventListener("click", (e) => {
+    e.stopPropagation();
+    handleObjectClick(obj, isCorrect);
+  });
+
+  // Наведение
   obj.addEventListener("mouseenter", () => handleObjectHover(obj));
   obj.addEventListener("touchstart", () => handleObjectHover(obj));
 
   arContainer.appendChild(obj);
-  currentObjects.push({ element: obj, worldPosition });
+  currentObjects.push({ element: obj, angle });
 
   return obj;
 }
 
-function updateObjectPosition(element, worldPosition) {
-  const screenPos = calculateScreenPosition(worldPosition);
-  element.style.left = screenPos.x + "%";
-  element.style.top = screenPos.y + "%";
-
-  // Масштаб в зависимости от расстояния
-  const scale = Math.max(0.5, 3 / worldPosition.z);
-  element.style.transform += ` scale(${scale})`;
-
-  // Видимость в зависимости от расстояния и ориентации
-  const distance = Math.sqrt(worldPosition.x**2 + worldPosition.y**2 + worldPosition.z**2);
-  if (distance < 15 && screenPos.x > 5 && screenPos.x < 95 && screenPos.y > 10 && screenPos.y < 90) {
-    element.classList.add("visible");
-    element.style.opacity = Math.max(0.3, 1.5 / distance);
-  } else {
-    element.classList.remove("visible");
-    element.style.opacity = "0";
-  }
-}
-
 function handleObjectHover(obj) {
-  if (obj.classList.contains("highlighted") || !obj.classList.contains("visible")) return;
+  if (!obj.classList.contains("visible") || obj.classList.contains("highlighted")) return;
 
   obj.classList.add("highlighted");
   playSound(soundHover);
 
-  // Эффект при наведении
   const rect = obj.getBoundingClientRect();
   createParticles(rect.left + rect.width/2, rect.top + rect.height/2, "#00ffaa", 5);
 }
 
 function handleObjectClick(obj, isCorrect) {
-  if (!obj.classList.contains("visible")) return;
+  if (!obj.classList.contains("visible")) {
+    showMessage("Поверни телефон, чтобы увидеть объект!", "error");
+    return;
+  }
 
   if (isCorrect) {
     // Правильный выбор
     playSound(soundCorrect);
 
-    // Анимация полёта к цели
-    const target = taskTargets.children[currentIndex];
+    // Анимация полёта
+    const target = taskTargets.children[mode === "words" ? currentIndex : collectedItems.length];
     if (target) {
       const targetRect = target.getBoundingClientRect();
       const objRect = obj.getBoundingClientRect();
@@ -267,29 +222,14 @@ function handleObjectClick(obj, isCorrect) {
     playSound(soundWrong);
     showMessage("Это не то, что нужно!", "error");
 
-    // Эффект исчезновения
-    obj.style.transition = "opacity 0.5s";
+    obj.style.transition = "opacity 0.5s, transform 0.5s";
     obj.style.opacity = "0";
+    obj.style.transform = "scale(0) rotate(180deg)";
+
     setTimeout(() => {
       if (obj.parentNode) obj.remove();
     }, 500);
   }
-}
-
-/* ====== ОБНОВЛЕНИЕ ПОЗИЦИЙ ОБЪЕКТОВ ====== */
-function startGameLoop() {
-  function update() {
-    if (!gameActive) return;
-
-    currentObjects.forEach(obj => {
-      const worldPos = JSON.parse(obj.element.dataset.worldPos);
-      updateObjectPosition(obj.element, worldPos);
-    });
-
-    requestAnimationFrame(update);
-  }
-
-  update();
 }
 
 /* ====== РЕЖИМ СЛОВА ====== */
@@ -298,10 +238,8 @@ function startWordsGame() {
   currentWord = WORDS[Math.floor(Math.random() * WORDS.length)];
   currentIndex = 0;
 
-  // Показываем задание
   taskText.textContent = `Собери слово:`;
 
-  // Показываем буквы слова
   taskTargets.innerHTML = "";
   for (let i = 0; i < currentWord.length; i++) {
     const span = document.createElement("span");
@@ -310,7 +248,7 @@ function startWordsGame() {
     taskTargets.appendChild(span);
   }
 
-  // Запускаем первую букву
+  showMessage(`Ищи букву "${currentWord[0]}"! Двигай телефоном`, "info");
   spawnLetterObjects();
 }
 
@@ -318,9 +256,8 @@ function spawnLetterObjects() {
   clearARObjects();
 
   const correctLetter = currentWord[currentIndex];
-
-  // Собираем массив из 3 разных букв
   const letters = [correctLetter];
+
   while (letters.length < 3) {
     const randomLetter = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
     if (!letters.includes(randomLetter)) {
@@ -328,37 +265,38 @@ function spawnLetterObjects() {
     }
   }
 
-  // Перемешиваем
   letters.sort(() => Math.random() - 0.5);
 
-  // Создаём объекты в пространстве
   letters.forEach((letter, index) => {
     const isCorrect = (letter === correctLetter);
-    const worldPos = getRandomPositionInSpace();
-    createARObject(letter, isCorrect, worldPos);
+    createARObject(letter, isCorrect, index);
   });
+
+  // Запускаем симуляцию движения
+  if (!window.movementInterval) {
+    window.movementInterval = setInterval(simulateMovement, 50);
+  }
 }
 
 function handleCorrectLetter() {
-  // Помечаем найденную букву
   const targetItems = document.querySelectorAll(".target-item");
   if (targetItems[currentIndex]) {
     targetItems[currentIndex].classList.add("found");
   }
 
-  // Переход к следующей букве
   currentIndex++;
 
   if (currentIndex >= currentWord.length) {
-    // Слово собрано!
+    clearInterval(window.movementInterval);
+    window.movementInterval = null;
+
     setTimeout(() => {
       showScreen(winScreen);
     }, 1000);
   } else {
-    // Следующая буква
     setTimeout(() => {
       spawnLetterObjects();
-      showMessage(`Теперь ищи букву "${currentWord[currentIndex]}"`, "info");
+      showMessage(`Теперь ищи букву "${currentWord[currentIndex]}"!`, "info");
     }, 500);
   }
 }
@@ -369,10 +307,8 @@ function startItemsGame() {
   currentCategory = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
   collectedItems = [];
 
-  // Показываем задание
   taskText.textContent = currentCategory.question;
 
-  // Показываем предметы, которые нужно найти
   taskTargets.innerHTML = "";
   currentCategory.items.forEach(item => {
     const span = document.createElement("span");
@@ -382,26 +318,22 @@ function startItemsGame() {
     taskTargets.appendChild(span);
   });
 
-  // Запускаем первый предмет
+  showMessage(`Ищи ${currentCategory.items[0].name.toLowerCase()}! Двигай телефоном`, "info");
   spawnItemObjects();
 }
 
 function spawnItemObjects() {
   clearARObjects();
 
-  // Находим ещё не собранные предметы
   const neededItems = currentCategory.items.filter(item =>
     !collectedItems.some(collected => collected.name === item.name)
   );
 
   if (neededItems.length === 0) return;
 
-  const correctItem = neededItems[0]; // Берём первый из нужных
-
-  // Собираем массив из 3 разных предметов
+  const correctItem = neededItems[0];
   const items = [correctItem];
 
-  // Добавляем случайные предметы из других категорий
   const allItems = [];
   CATEGORIES.forEach(cat => {
     cat.items.forEach(item => {
@@ -421,19 +353,19 @@ function spawnItemObjects() {
     }
   }
 
-  // Перемешиваем
   items.sort(() => Math.random() - 0.5);
 
-  // Создаём объекты в пространстве
   items.forEach((item, index) => {
     const isCorrect = (item.name === correctItem.name);
-    const worldPos = getRandomPositionInSpace();
-    createARObject(item.emoji, isCorrect, worldPos);
+    createARObject(item.emoji, isCorrect, index);
   });
+
+  if (!window.movementInterval) {
+    window.movementInterval = setInterval(simulateMovement, 50);
+  }
 }
 
 function handleCorrectItem() {
-  // Находим правильный предмет
   const neededItems = currentCategory.items.filter(item =>
     !collectedItems.some(collected => collected.name === item.name)
   );
@@ -443,28 +375,27 @@ function handleCorrectItem() {
   const correctItem = neededItems[0];
   collectedItems.push(correctItem);
 
-  // Помечаем найденный предмет
   const targetItems = document.querySelectorAll(".target-item");
   const itemIndex = currentCategory.items.findIndex(item => item.name === correctItem.name);
   if (targetItems[itemIndex]) {
     targetItems[itemIndex].classList.add("found");
   }
 
-  // Проверяем, все ли собраны
   if (collectedItems.length === currentCategory.items.length) {
-    // Все предметы собраны!
+    clearInterval(window.movementInterval);
+    window.movementInterval = null;
+
     setTimeout(() => {
       showScreen(winScreen);
     }, 1000);
   } else {
-    // Следующий предмет
     setTimeout(() => {
       spawnItemObjects();
       const nextItem = currentCategory.items.find(item =>
         !collectedItems.some(collected => collected.name === item.name)
       );
       if (nextItem) {
-        showMessage(`Теперь ищи ${nextItem.name.toLowerCase()}`, "info");
+        showMessage(`Теперь ищи ${nextItem.name.toLowerCase()}!`, "info");
       }
     }, 500);
   }
@@ -474,21 +405,20 @@ function handleCorrectItem() {
 wordsBtn.addEventListener("click", () => {
   showScreen(gameScreen);
   startCamera();
-  initDeviceOrientation();
-  setTimeout(() => startWordsGame(), 500);
+  setTimeout(() => startWordsGame(), 300);
 });
 
 itemsBtn.addEventListener("click", () => {
   showScreen(gameScreen);
   startCamera();
-  initDeviceOrientation();
-  setTimeout(() => startItemsGame(), 500);
+  setTimeout(() => startItemsGame(), 300);
 });
 
 homeBtn.addEventListener("click", () => {
   showScreen(menuScreen);
   clearARObjects();
-  gameActive = false;
+  clearInterval(window.movementInterval);
+  window.movementInterval = null;
 });
 
 playAgainBtn.addEventListener("click", () => {
@@ -500,12 +430,16 @@ playAgainBtn.addEventListener("click", () => {
 backMenuBtn.addEventListener("click", () => {
   showScreen(menuScreen);
   clearARObjects();
-  gameActive = false;
+  clearInterval(window.movementInterval);
+  window.movementInterval = null;
 });
 
-/* ====== ИНИЦИАЛИЗАЦИЯ ====== */
-// При загрузке показываем меню
-window.addEventListener('load', () => {
-  // Добавляем красивый фон на меню
-  menuScreen.style.background = "linear-gradient(135deg, #667eea 0%, #764ba2 100%)";
+/* ====== КЛИК ПО ЭКРАНУ ДЛЯ ТЕСТА ====== */
+gameScreen.addEventListener("click", (e) => {
+  if (e.target === gameScreen || e.target === camera) {
+    showMessage("Двигай телефоном в разные стороны, чтобы найти объекты!", "info");
+  }
 });
+
+/* ====== ЗАПУСК ====== */
+console.log("AR игра загружена!");
