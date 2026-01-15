@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>AR Mini App</title>
+
+  <!-- Стили -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ====== ГЛАВНОЕ МЕНЮ ====== -->
+  <div id="menu" class="screen active">
+    <div class="menu-title">AR Мини-игра</div>
+    <div class="menu-buttons">
+      <button id="words-btn" class="menu-btn">🎯 Слова</button>
+      <button id="items-btn" class="menu-btn">🏺 Предметы</button>
+    </div>
+  </div>
+
+  <!-- ====== ИГРОВОЙ ЭКРАН ====== -->
+  <div id="game" class="screen">
+    <video id="camera" autoplay playsinline></video>
+
+    <div id="task-panel"></div>
+
+    <button id="home-btn">🏠 Меню</button>
+
+    <div id="message"></div>
+  </div>
+
+  <!-- ====== ЭКРАН ПОБЕДЫ ====== -->
+  <div id="win" class="screen">
+    <h2>🎉 Отлично!</h2>
+    <button id="play-again-btn">Сыграть ещё раз</button>
+  </div>
+
+  <!-- Данные -->
+  <script type="module" src="data.js"></script>
+  <!-- Логика -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
