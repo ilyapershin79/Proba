@@ -3,38 +3,100 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>AR Mini App</title>
-
-  <!-- Стили -->
+  <title>AR Детская Игра: Слова и Предметы</title>
   <link rel="stylesheet" href="styles.css" />
+  <!-- Шрифт для красоты -->
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;900&family=Comic+Neue:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
-
   <!-- ====== ГЛАВНОЕ МЕНЮ ====== -->
   <div id="menu" class="screen active">
-    <div class="menu-title">AR Мини-игра</div>
+    <div class="menu-title">🎮 AR Приключение!</div>
+    <div class="menu-subtitle">Найди буквы и предметы вокруг себя!</div>
+
     <div class="menu-buttons">
-      <button id="words-btn" class="menu-btn">🎯 Слова</button>
-      <button id="items-btn" class="menu-btn">🏺 Предметы</button>
+      <button id="words-btn" class="menu-btn">
+        <div class="btn-icon">🔤</div>
+        <div class="btn-text">
+          <div class="btn-title">Собери слово</div>
+          <div class="btn-desc">Ищи буквы в комнате</div>
+        </div>
+      </button>
+
+      <button id="items-btn" class="menu-btn">
+        <div class="btn-icon">🎯</div>
+        <div class="btn-text">
+          <div class="btn-title">Найди предметы</div>
+          <div class="btn-desc">Ищи что нужно для дела</div>
+        </div>
+      </button>
+    </div>
+
+    <div class="menu-hint">
+      🔍 Двигай телефоном, чтобы искать буквы и предметы вокруг!
     </div>
   </div>
 
   <!-- ====== ИГРОВОЙ ЭКРАН ====== -->
   <div id="game" class="screen">
+    <!-- Видео с камеры -->
     <video id="camera" autoplay playsinline></video>
 
-    <div id="task-panel"></div>
+    <!-- Панель задания -->
+    <div id="task-panel">
+      <div id="task-text"></div>
+      <div id="task-targets"></div>
+    </div>
 
-    <button id="home-btn">🏠 Меню</button>
+    <!-- Компас-подсказка -->
+    <div id="compass">
+      <div class="compass-circle">
+        <div class="compass-arrow">↑</div>
+      </div>
+      <div class="compass-text">Ищи вокруг себя!</div>
+    </div>
 
+    <!-- Кнопка домой -->
+    <button id="home-btn">
+      <span class="home-icon">←</span>
+      Меню
+    </button>
+
+    <!-- Сообщения -->
     <div id="message"></div>
+
+    <!-- Контейнер для AR объектов -->
+    <div id="ar-container"></div>
+
+    <!-- Элементы для эффектов -->
+    <div id="effects-container"></div>
   </div>
 
   <!-- ====== ЭКРАН ПОБЕДЫ ====== -->
   <div id="win" class="screen">
-    <h2>🎉 Отлично!</h2>
-    <button id="play-again-btn">Сыграть ещё раз</button>
+    <div class="win-content">
+      <div class="win-icon">🎉</div>
+      <h2>Ура! Получилось!</h2>
+      <p class="win-message">Ты отлично справился!</p>
+      <button id="play-again-btn" class="win-btn">Играть ещё раз</button>
+      <button id="back-menu-btn" class="win-btn secondary">Выбрать другую игру</button>
+    </div>
+
+    <div class="confetti"></div>
+    <div class="confetti"></div>
+    <div class="confetti"></div>
   </div>
+
+  <!-- Звуковые элементы (скрытые) -->
+  <audio id="sound-correct" preload="auto">
+    <source src="https://assets.mixkit.co/sfx/preview/mixkit-winning-chimes-2015.mp3" type="audio/mpeg">
+  </audio>
+  <audio id="sound-wrong" preload="auto">
+    <source src="https://assets.mixkit.co/sfx/preview/mixkit-wrong-answer-fail-notification-946.mp3" type="audio/mpeg">
+  </audio>
+  <audio id="sound-hover" preload="auto">
+    <source src="https://assets.mixkit.co/sfx/preview/mixkit-magic-sparkles-3009.mp3" type="audio/mpeg">
+  </audio>
 
   <!-- Данные -->
   <script type="module" src="data.js"></script>

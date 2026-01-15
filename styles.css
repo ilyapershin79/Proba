@@ -1,21 +1,20 @@
 /* ====== ОБЩИЕ НАСТРОЙКИ ====== */
-
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: "Arial", sans-serif;
+  font-family: 'Nunito', 'Arial', sans-serif;
 }
 
 html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #87ceeb;
+  background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+  color: white;
 }
 
 /* ====== ЭКРАНЫ ====== */
-
 .screen {
   position: absolute;
   inset: 0;
@@ -23,156 +22,455 @@ html, body {
   justify-content: center;
   align-items: center;
   flex-direction: column;
+  padding: 20px;
 }
 
 .screen.active {
   display: flex;
+  animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* ====== ГЛАВНОЕ МЕНЮ ====== */
-
 #menu {
-  background: linear-gradient(180deg, #7dd3fc, #fef9c3);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  text-align: center;
+  gap: 40px;
 }
 
 .menu-title {
-  font-size: 42px;
-  margin-bottom: 40px;
+  font-size: 3.5rem;
+  font-weight: 900;
+  margin-bottom: 10px;
+  text-shadow: 0 4px 8px rgba(0,0,0,0.3);
+  animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.menu-subtitle {
+  font-size: 1.2rem;
+  opacity: 0.9;
+  max-width: 300px;
 }
 
 .menu-buttons {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 25px;
+  width: 100%;
+  max-width: 350px;
 }
 
 .menu-btn {
-  font-size: 26px;
-  padding: 20px 40px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
   border: none;
   border-radius: 20px;
   cursor: pointer;
-  background: #22c55e;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.3);
   color: white;
-  transition: transform 0.2s ease, background 0.2s ease;
+  transition: all 0.3s ease;
+  text-align: left;
 }
 
 .menu-btn:hover {
-  background: #16a34a;
-  transform: scale(1.05);
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.2);
 }
 
-/* ====== AR ЭКРАН ====== */
+.btn-icon {
+  font-size: 2.5rem;
+}
 
+.btn-text {
+  flex: 1;
+}
+
+.btn-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+
+.btn-desc {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.menu-hint {
+  position: absolute;
+  bottom: 30px;
+  background: rgba(0,0,0,0.5);
+  padding: 15px;
+  border-radius: 15px;
+  max-width: 300px;
+  font-size: 0.9rem;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+/* ====== ИГРОВОЙ ЭКРАН ====== */
 #game {
-  background: black;
+  background: #000;
 }
 
 #camera {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
 }
 
-/* ====== AR ОБЪЕКТЫ ====== */
-
-.ar-object {
-  position: absolute;
-  font-size: 64px;
-  cursor: pointer;
-  user-select: none;
-  animation: float 3s ease-in-out infinite;
-  transition: transform 0.2s ease;
-}
-
-.ar-object:active {
-  transform: scale(1.3);
-}
-
-/* ====== ПЛАВАЮЩАЯ АНИМАЦИЯ ====== */
-
-@keyframes float {
-  0%   { transform: translateY(0px); }
-  50%  { transform: translateY(-20px); }
-  100% { transform: translateY(0px); }
-}
-
-/* ====== ПАНЕЛЬ СЛОВА / ЗАДАНИЯ ====== */
-
+/* Панель задания */
 #task-panel {
   position: absolute;
-  top: 10px;
+  top: 20px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(255,255,255,0.85);
-  padding: 12px 20px;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(10px);
+  padding: 20px;
   border-radius: 20px;
-  font-size: 22px;
-  z-index: 10;
+  border: 2px solid rgba(255, 215, 0, 0.5);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+  z-index: 100;
+  max-width: 90%;
+  min-width: 300px;
+  text-align: center;
 }
 
-/* ====== КНОПКА ДОМОЙ ====== */
+#task-text {
+  font-size: 1.3rem;
+  margin-bottom: 15px;
+  font-weight: 700;
+  color: #ffd700;
+}
 
+#task-targets {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.target-item {
+  font-size: 2.5rem;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.target-item.found {
+  background: rgba(46, 204, 113, 0.3);
+  border: 2px solid #2ecc71;
+  transform: scale(1.1);
+}
+
+/* Компас */
+#compass {
+  position: absolute;
+  bottom: 100px;
+  left: 20px;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 15px;
+  border-radius: 50px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  z-index: 50;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.compass-circle {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(52, 152, 219, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: spin 4s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.compass-arrow {
+  font-size: 1.5rem;
+}
+
+.compass-text {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+/* Кнопка домой */
 #home-btn {
   position: absolute;
   bottom: 20px;
   left: 20px;
-  font-size: 22px;
-  padding: 14px 20px;
-  border-radius: 16px;
+  font-size: 1.1rem;
+  padding: 15px 25px;
+  border-radius: 50px;
   border: none;
   cursor: pointer;
-  background: #f97316;
+  background: linear-gradient(135deg, #ff416c, #ff4b2b);
   color: white;
-  z-index: 10;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 15px rgba(255, 65, 108, 0.4);
+  transition: transform 0.3s ease;
 }
 
 #home-btn:hover {
-  background: #ea580c;
+  transform: scale(1.05);
 }
 
-/* ====== СООБЩЕНИЯ ====== */
+.home-icon {
+  font-size: 1.3rem;
+}
 
+/* Сообщения */
 #message {
   position: absolute;
-  bottom: 100px;
+  bottom: 150px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0,0,0,0.7);
+  background: rgba(0, 0, 0, 0.9);
   color: white;
-  padding: 14px 24px;
-  border-radius: 20px;
-  font-size: 20px;
+  padding: 20px 30px;
+  border-radius: 15px;
+  font-size: 1.2rem;
   display: none;
-  z-index: 10;
+  z-index: 100;
+  border: 2px solid;
+  max-width: 80%;
+  text-align: center;
+  animation: messageSlide 0.3s ease;
+}
+
+@keyframes messageSlide {
+  from { bottom: 120px; opacity: 0; }
+  to { bottom: 150px; opacity: 1; }
 }
 
 #message.show {
   display: block;
 }
 
-/* ====== ЭКРАН ПОБЕДЫ ====== */
+#message.success {
+  border-color: #2ecc71;
+  background: rgba(46, 204, 113, 0.2);
+}
 
+#message.error {
+  border-color: #e74c3c;
+  background: rgba(231, 76, 60, 0.2);
+}
+
+/* Контейнер для AR объектов */
+#ar-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* AR объекты */
+.ar-object {
+  position: absolute;
+  font-size: 4rem;
+  cursor: pointer;
+  user-select: none;
+  pointer-events: auto;
+  transition: all 0.3s ease;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  opacity: 0;
+  animation: appear 0.5s forwards;
+}
+
+@keyframes appear {
+  to { opacity: 1; }
+}
+
+.ar-object.visible {
+  opacity: 1;
+}
+
+.ar-object.highlighted {
+  animation: glow 1.5s infinite alternate, float 3s ease-in-out infinite;
+  transform: scale(1.2);
+  z-index: 20;
+}
+
+@keyframes glow {
+  from {
+    text-shadow: 0 0 10px #fff, 0 0 20px #ffd700, 0 0 30px #ffd700;
+    transform: scale(1.1);
+  }
+  to {
+    text-shadow: 0 0 20px #fff, 0 0 30px #ff4b2b, 0 0 40px #ff4b2b;
+    transform: scale(1.3);
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px) scale(1.1); }
+  50% { transform: translateY(-20px) scale(1.2); }
+}
+
+.ar-object.collecting {
+  animation: flyToTarget 0.8s cubic-bezier(0.5, 0, 0.5, 1) forwards;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+@keyframes flyToTarget {
+  to {
+    transform: translate(var(--target-x), var(--target-y)) scale(0.1);
+    opacity: 0;
+  }
+}
+
+/* Эффекты */
+.effect-particle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 5;
+  animation: particleExplode 1s forwards;
+}
+
+@keyframes particleExplode {
+  from {
+    transform: scale(1) translate(0, 0);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0) translate(var(--tx), var(--ty));
+    opacity: 0;
+  }
+}
+
+/* ====== ЭКРАН ПОБЕДЫ ====== */
 #win {
-  background: radial-gradient(circle, #fef08a, #facc15);
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
   text-align: center;
+  overflow: hidden;
+}
+
+.win-content {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  padding: 40px;
+  border-radius: 30px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  max-width: 400px;
+  animation: popIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes popIn {
+  0% { transform: scale(0); }
+  80% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.win-icon {
+  font-size: 5rem;
+  margin-bottom: 20px;
+  animation: bounce 1s infinite;
 }
 
 #win h2 {
-  font-size: 40px;
-  margin-bottom: 30px;
+  font-size: 2.5rem;
+  margin-bottom: 10px;
 }
 
-#win button {
-  font-size: 26px;
-  padding: 18px 40px;
-  border-radius: 20px;
+.win-message {
+  font-size: 1.2rem;
+  margin-bottom: 30px;
+  opacity: 0.9;
+}
+
+.win-btn {
+  font-size: 1.2rem;
+  padding: 18px 35px;
+  border-radius: 50px;
   border: none;
   cursor: pointer;
-  background: #22c55e;
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
   color: white;
+  margin: 10px;
+  width: 100%;
+  max-width: 250px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-#win button:hover {
-  background: #16a34a;
+.win-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 7px 20px rgba(0, 0, 0, 0.3);
+}
+
+.win-btn.secondary {
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid white;
+}
+
+/* Конфетти */
+.confetti {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  background: #ff0;
+  top: -20px;
+  animation: confettiFall 5s linear forwards;
+}
+
+.confetti:nth-child(2) { background: #f0f; left: 20%; animation-delay: 0.5s; }
+.confetti:nth-child(3) { background: #0ff; left: 80%; animation-delay: 1s; }
+
+@keyframes confettiFall {
+  to {
+    transform: translateY(100vh) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+/* Адаптив */
+@media (max-width: 480px) {
+  .menu-title { font-size: 2.5rem; }
+  .menu-btn { padding: 15px; }
+  .btn-icon { font-size: 2rem; }
+  .btn-title { font-size: 1.3rem; }
+  #task-panel { padding: 15px; min-width: 280px; }
+  .target-item { font-size: 2rem; width: 50px; height: 50px; }
 }
