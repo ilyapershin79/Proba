@@ -88,14 +88,14 @@ function createVirtualObjects(contents, correctIndex) {
   });
   virtualObjects = [];
 
-  // 6 разных мест В МИРОВЫХ КООРДИНАТАХ (статические!)
+  // 6 СОВЕРШЕННО РАЗНЫХ мест В МИРЕ
   const positions = [
-    { x: -15, y: 0, z: 10 },    // ДАЛЕКО слева
-    { x: 15, y: 0, z: 10 },     // ДАЛЕКО справа
-    { x: 0, y: 12, z: 8 },      // ДАЛЕКО сверху
-    { x: 0, y: -8, z: 12 },     // ДАЛЕКО снизу
-    { x: -10, y: 6, z: 14 },    // Слева-сверху
-    { x: 10, y: -4, z: 16 }     // Справа-снизу
+    { x: -25, y: 5, z: 10 },     // ДАЛЕКО слева-вверху
+    { x: 25, y: -5, z: 10 },     // ДАЛЕКО справа-внизу
+    { x: -5, y: 20, z: 8 },      // ОЧЕНЬ ВЫСОКО сверху
+    { x: 15, y: -15, z: 12 },    // Справа-ОЧЕНЬ низко
+    { x: -20, y: -10, z: 14 },   // Слева-внизу
+    { x: 10, y: 15, z: 16 }      // Справа-вверху
   ];
 
   contents.forEach((content, index) => {
@@ -136,42 +136,32 @@ function updateObjectsPosition() {
   virtualObjects.forEach(obj => {
     if (!obj.element) return;
 
-    // КРИТИЧНО: позиция объекта в мировых координатах НЕ меняется
-    // Мы только меняем, КАК ЭТА позиция отображается на экране
-    // в зависимости от поворота телефона
+    // ОБЪЕКТЫ В МИРОВЫХ КООРДИНАТАХ
+    // Когда телефон поворачивается, мы ВЫЧИТАЕМ поворот из позиции
+    const screenX = 50 + obj.position.x - (deviceGamma * 0.5);
+    const screenY = 50 + obj.position.y - ((deviceBeta - 90) * 0.5);
 
-    // Преобразуем мировые координаты в экранные
-    // deviceGamma - наклон влево/вправо
-    // deviceBeta - наклон вперед/назад
-
-    // Когда телефон поворачивается, объект должен "уходить" в сторону
-    const screenX = 50 + (obj.position.x * 0.7) - (deviceGamma * 0.7);
-    const screenY = 50 + (obj.position.y * 0.6) - ((deviceBeta - 90) * 0.7);
-
-    // Объект виден только если он в пределах экрана
+    // Объект виден только если он в пределах поля зрения
     const isVisible =
-      screenX > 10 && screenX < 90 &&
-      screenY > 20 && screenY < 80;
+      screenX > 5 && screenX < 95 &&
+      screenY > 10 && screenY < 90;
 
-    // Проверяем, в центре ли экрана (для выделения)
+    // Проверяем, в центре ли экрана
     const isInCenter =
-      Math.abs(screenX - 50) < 15 &&
-      Math.abs(screenY - 50) < 15;
+      Math.abs(screenX - 50) < 10 &&
+      Math.abs(screenY - 50) < 10;
 
     if (isVisible && !obj.isVisible) {
-      // ПОЯВЛЕНИЕ объекта (повернули телефон в его сторону)
       obj.isVisible = true;
       obj.element.style.transition = "opacity 0.5s, transform 0.5s";
       obj.element.style.opacity = "1";
       obj.element.style.transform = "scale(1)";
       obj.element.classList.add("visible");
 
-      // Устанавливаем позицию
       obj.element.style.left = `${screenX}%`;
       obj.element.style.top = `${screenY}%`;
 
     } else if (!isVisible && obj.isVisible) {
-      // ИСЧЕЗНОВЕНИЕ объекта (отвернули телефон)
       obj.isVisible = false;
       obj.element.style.transition = "opacity 0.3s, transform 0.3s";
       obj.element.style.opacity = "0";
@@ -179,13 +169,11 @@ function updateObjectsPosition() {
       obj.element.classList.remove("visible", "highlighted");
 
     } else if (isVisible && obj.isVisible) {
-      // Обновляем позицию (плавно следим за объектом)
-      obj.element.style.transition = "left 0.1s, top 0.1s";
+      obj.element.style.transition = "left 0.2s, top 0.2s";
       obj.element.style.left = `${screenX}%`;
       obj.element.style.top = `${screenY}%`;
     }
 
-    // Выделение если объект в центре
     if (isInCenter && obj.isVisible) {
       obj.element.classList.add("highlighted");
     } else {
