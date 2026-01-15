@@ -26,7 +26,6 @@ let collectedItems = [];
 /* ====== ГИРОСКОП ====== */
 let deviceAlpha = 0;   // Горизонтальный поворот (0-360°) - куда смотрит телефон
 let deviceBeta = 90;   // Вертикальный наклон (0-180°) - вверх/вниз
-let deviceGamma = 0;   // Наклон влево/вправо (-90 до 90)
 
 /* ====== ВИРТУАЛЬНЫЕ ОБЪЕКТЫ ====== */
 let virtualObjects = [];
@@ -60,7 +59,6 @@ function startGyroscope() {
     window.addEventListener("deviceorientation", (event) => {
       deviceAlpha = event.alpha || 0;   // 0-360 градусов (горизонталь)
       deviceBeta = event.beta || 90;    // 0-180 градусов (вертикаль)
-      deviceGamma = event.gamma || 0;   // -90-90 градусов (наклон)
       updateObjectsPosition();
     });
     console.log("Гироскоп работает");
@@ -69,7 +67,6 @@ function startGyroscope() {
     // Для теста на компьютере
     deviceAlpha = 0;
     deviceBeta = 90;
-    deviceGamma = 0;
   }
 }
 
@@ -92,16 +89,15 @@ function createVirtualObjects(contents, correctIndex) {
   virtualObjects = [];
 
   // Создаем 3 объекта в РАЗНЫХ местах пространства
-  // Каждому объекту: горизонтальный угол (alpha) и вертикальный угол (beta)
   const positions = [];
 
   // Всегда 3 объекта
   for (let i = 0; i < 3; i++) {
     // Генерируем случайные углы для каждого объекта
     // Горизонталь: 0-360° (полный круг)
-    // Вертикаль: 30-150° (чтобы не слишком высоко/низко)
+    // Вертикаль: 40-140° (чтобы не слишком высоко/низко)
     const horizontal = Math.floor(Math.random() * 360); // 0-359°
-    const vertical = 30 + Math.floor(Math.random() * 120); // 30-149°
+    const vertical = 40 + Math.floor(Math.random() * 100); // 40-139°
 
     positions.push({
       horizontal: horizontal,  // Куда смотреть горизонтально
@@ -111,7 +107,7 @@ function createVirtualObjects(contents, correctIndex) {
   }
 
   // Убедимся что объекты не слишком близко друг к другу
-  // Минимальное расстояние: 60° по горизонтали, 40° по вертикали
+  // Минимальное расстояние: 80° по горизонтали, 60° по вертикали
   for (let i = 0; i < positions.length; i++) {
     for (let j = i + 1; j < positions.length; j++) {
       let hDiff = Math.abs(positions[i].horizontal - positions[j].horizontal);
@@ -120,9 +116,9 @@ function createVirtualObjects(contents, correctIndex) {
       let vDiff = Math.abs(positions[i].vertical - positions[j].vertical);
 
       // Если слишком близко - перемещаем второй объект
-      if (hDiff < 60 && vDiff < 40) {
-        positions[j].horizontal = (positions[j].horizontal + 120) % 360;
-        positions[j].vertical = Math.min(150, Math.max(30, positions[j].vertical + 50));
+      if (hDiff < 80 && vDiff < 60) {
+        positions[j].horizontal = (positions[j].horizontal + 150) % 360;
+        positions[j].vertical = Math.min(140, Math.max(40, positions[j].vertical + 70));
       }
     }
   }
@@ -135,7 +131,10 @@ function createVirtualObjects(contents, correctIndex) {
       position: positions[index], // Фиксированное положение в пространстве
       element: null,
       isVisible: false,
-      hasBeenClicked: false
+      hasBeenClicked: false,
+      isHighlighted: false,
+      lastScreenX: 50,
+      lastScreenY: 50
     };
 
     // Создаём DOM элемент
@@ -144,6 +143,7 @@ function createVirtualObjects(contents, correctIndex) {
     element.textContent = content;
     element.dataset.correct = obj.isCorrect;
     element.dataset.id = obj.id;
+    element.dataset.objectId = obj.id;
 
     // Начально скрыт
     element.style.opacity = "0";
@@ -156,8 +156,19 @@ function createVirtualObjects(contents, correctIndex) {
     element.addEventListener("click", (e) => {
       e.stopPropagation();
       if (obj.hasBeenClicked) return;
+
+      // ПРОВЕРЯЕМ СЕЙЧАС - объект все еще в центре?
+      const currentHDiff = calculateHorizontalDiff(deviceAlpha, obj.position.horizontal);
+      const currentVDiff = Math.abs(deviceBeta - obj.position.vertical);
+      const isCurrentlyInCenter = currentHDiff < 25 && currentVDiff < 20;
+
+      if (!isCurrentlyInCenter) {
+        showMessage("Объект ушел из центра! Наведи заново", "error");
+        return;
+      }
+
       obj.hasBeenClicked = true;
-      handleObjectClick(element, obj.isCorrect);
+      handleObjectClick(element, obj.isCorrect, obj.id);
     });
 
     gameScreen.appendChild(element);
@@ -168,51 +179,57 @@ function createVirtualObjects(contents, correctIndex) {
   updateObjectsPosition();
 }
 
+// Вспомогательная функция для расчета разницы углов
+function calculateHorizontalDiff(alpha1, alpha2) {
+  let diff = Math.abs(alpha1 - alpha2);
+  if (diff > 180) diff = 360 - diff;
+  return diff;
+}
+
 function updateObjectsPosition() {
   virtualObjects.forEach(obj => {
     if (!obj.element || obj.hasBeenClicked) return;
 
     // РАСЧЕТ ВИДИМОСТИ ОБЪЕКТА
-    // Объект зафиксирован в пространстве: obj.position.horizontal и obj.position.vertical
-    // Телефон смотрит: deviceAlpha и deviceBeta
-
     // 1. Разница по горизонтали
-    let horizontalDiff = Math.abs(deviceAlpha - obj.position.horizontal);
-    if (horizontalDiff > 180) {
-      horizontalDiff = 360 - horizontalDiff;
-    }
+    const horizontalDiff = calculateHorizontalDiff(deviceAlpha, obj.position.horizontal);
 
     // 2. Разница по вертикали
-    let verticalDiff = Math.abs(deviceBeta - obj.position.vertical);
+    const verticalDiff = Math.abs(deviceBeta - obj.position.vertical);
 
     // 3. Объект виден если телефон смотрит примерно в его направлении
-    // ±40° по горизонтали, ±30° по вертикали
-    const isVisible = horizontalDiff < 40 && verticalDiff < 30;
+    // ШИРОКОЕ ПОЛЕ ЗРЕНИЯ: ±60° по горизонтали, ±50° по вертикали
+    const isVisible = horizontalDiff < 60 && verticalDiff < 50;
 
     // 4. Позиция на экране зависит от точности наведения
     // Чем точнее смотрим на объект, тем он ближе к центру
 
     // Горизонтальная позиция: -1 (край левый) до 1 (край правый)
-    let horizontalPos = (deviceAlpha - obj.position.horizontal) / 40;
+    let horizontalPos = (deviceAlpha - obj.position.horizontal) / 60;
     if (horizontalPos > 1) horizontalPos = 1;
     if (horizontalPos < -1) horizontalPos = -1;
 
     // Вертикальная позиция: -1 (верх) до 1 (низ)
-    let verticalPos = (deviceBeta - obj.position.vertical) / 30;
+    let verticalPos = (deviceBeta - obj.position.vertical) / 50;
     if (verticalPos > 1) verticalPos = 1;
     if (verticalPos < -1) verticalPos = -1;
 
     // Преобразуем в проценты экрана (центр = 50%)
-    const screenX = 50 + (horizontalPos * 30);  // 20%..80%
-    const screenY = 50 + (verticalPos * 25);    // 25%..75%
+    const screenX = 50 + (horizontalPos * 35);  // 15%..85%
+    const screenY = 50 + (verticalPos * 30);    // 20%..80%
+
+    // Сохраняем позицию для проверки при клике
+    obj.lastScreenX = screenX;
+    obj.lastScreenY = screenY;
 
     // Объект в центре экрана?
-    const isInCenter = horizontalDiff < 20 && verticalDiff < 15;
+    // УЗКИЙ ЦЕНТР: ±25° по горизонтали, ±20° по вертикали
+    const isInCenter = horizontalDiff < 25 && verticalDiff < 20;
 
     // ПОКАЗЫВАЕМ объект
     if (isVisible && !obj.isVisible) {
       obj.isVisible = true;
-      obj.element.style.transition = "opacity 0.6s ease, transform 0.6s ease, left 0.4s ease, top 0.4s ease";
+      obj.element.style.transition = "opacity 0.7s ease, transform 0.7s ease, left 0.5s ease, top 0.5s ease";
       obj.element.style.opacity = "1";
       obj.element.style.transform = "scale(1)";
       obj.element.classList.add("visible");
@@ -220,33 +237,46 @@ function updateObjectsPosition() {
       obj.element.style.left = `${screenX}%`;
       obj.element.style.top = `${screenY}%`;
     }
-    // СКРЫВАЕМ объект
+    // СКРЫВАЕМ объект (МЕДЛЕННО)
     else if (!isVisible && obj.isVisible) {
       obj.isVisible = false;
-      obj.element.style.transition = "opacity 0.4s ease, transform 0.4s ease";
+      obj.element.style.transition = "opacity 0.8s ease, transform 0.8s ease";
       obj.element.style.opacity = "0";
       obj.element.style.transform = "scale(0)";
       obj.element.classList.remove("visible", "highlighted");
+      obj.isHighlighted = false;
     }
-    // ДВИГАЕМ объект на экране (плавно следим)
+    // ДВИГАЕМ объект на экране (ПЛАВНО)
     else if (isVisible && obj.isVisible) {
-      obj.element.style.transition = "left 0.3s ease, top 0.3s ease";
+      obj.element.style.transition = "left 0.4s ease, top 0.4s ease";
       obj.element.style.left = `${screenX}%`;
       obj.element.style.top = `${screenY}%`;
     }
 
     // Выделение если объект в центре
-    if (isInCenter && obj.isVisible) {
+    if (isInCenter && obj.isVisible && !obj.isHighlighted) {
+      obj.isHighlighted = true;
       obj.element.classList.add("highlighted");
-    } else {
+      obj.element.style.transition = "left 0.4s ease, top 0.4s ease, transform 0.3s ease";
+      obj.element.style.transform = "scale(1.3)";
+    }
+    else if ((!isInCenter || !obj.isVisible) && obj.isHighlighted) {
+      obj.isHighlighted = false;
       obj.element.classList.remove("highlighted");
+      obj.element.style.transform = "scale(1)";
     }
   });
 }
 
-function handleObjectClick(element, isCorrect) {
-  if (!element.classList.contains("highlighted")) {
-    showMessage("Наведи объект в центр экрана!", "error");
+function handleObjectClick(element, isCorrect, objectId) {
+  // Находим объект по ID
+  const obj = virtualObjects.find(o => o.id === objectId);
+  if (!obj) return;
+
+  // Двойная проверка - объект все еще выделен?
+  if (!obj.isHighlighted) {
+    showMessage("Объект больше не выделен!", "error");
+    obj.hasBeenClicked = false; // Разрешаем повторный клик
     return;
   }
 
@@ -262,7 +292,7 @@ function handleObjectClick(element, isCorrect) {
       const targetRect = target.getBoundingClientRect();
       const elementRect = element.getBoundingClientRect();
 
-      element.style.transition = "transform 0.8s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.8s ease";
+      element.style.transition = "transform 0.9s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.9s ease";
       element.style.transform = `translate(
         ${targetRect.left + targetRect.width/2 - elementRect.left}px,
         ${targetRect.top + targetRect.height/2 - elementRect.top}px
@@ -280,13 +310,19 @@ function handleObjectClick(element, isCorrect) {
       } else {
         handleCorrectItem();
       }
-    }, 800);
+
+      // Удаляем объект из массива
+      const index = virtualObjects.findIndex(o => o.id === objectId);
+      if (index > -1) {
+        virtualObjects.splice(index, 1);
+      }
+    }, 900);
 
   } else {
     // НЕПРАВИЛЬНО
     showMessage("Это не то, что нужно!", "error");
 
-    element.style.transition = "transform 0.5s ease, opacity 0.5s ease";
+    element.style.transition = "transform 0.6s ease, opacity 0.6s ease";
     element.style.transform = "scale(0) rotate(180deg)";
     element.style.opacity = "0";
 
@@ -294,7 +330,12 @@ function handleObjectClick(element, isCorrect) {
       if (element.parentNode) {
         element.remove();
       }
-    }, 500);
+      // Удаляем объект из массива
+      const index = virtualObjects.findIndex(o => o.id === objectId);
+      if (index > -1) {
+        virtualObjects.splice(index, 1);
+      }
+    }, 600);
   }
 }
 
@@ -342,7 +383,7 @@ function spawnLetterObjects() {
   // Создаём виртуальные объекты
   createVirtualObjects(letters, correctIndex);
 
-  showMessage(`Ищи букву "${correctLetter}"! Поворачивай телефон во все стороны`, "info");
+  showMessage(`Ищи букву "${correctLetter}"! Поворачивай телефон плавно`, "info");
 }
 
 function handleCorrectLetter() {
@@ -357,13 +398,13 @@ function handleCorrectLetter() {
     // Слово собрано
     setTimeout(() => {
       showScreen(winScreen);
-    }, 1000);
+    }, 1200);
   } else {
     // Следующая буква
     setTimeout(() => {
       spawnLetterObjects();
       showMessage(`Теперь ищи букву "${currentWord[currentIndex]}"`, "info");
-    }, 600);
+    }, 800);
   }
 }
 
@@ -430,7 +471,7 @@ function spawnItemObjects() {
   const correctIndex = items.findIndex(item => item.name === correctItem.name);
 
   createVirtualObjects(contents, correctIndex);
-  showMessage(`Ищи ${correctItem.name.toLowerCase()}! Поворачивай телефон`, "info");
+  showMessage(`Ищи ${correctItem.name.toLowerCase()}! Двигай телефон плавно`, "info");
 }
 
 function handleCorrectItem() {
@@ -452,7 +493,7 @@ function handleCorrectItem() {
   if (collectedItems.length === currentCategory.items.length) {
     setTimeout(() => {
       showScreen(winScreen);
-    }, 1000);
+    }, 1200);
   } else {
     setTimeout(() => {
       spawnItemObjects();
@@ -462,7 +503,7 @@ function handleCorrectItem() {
       if (nextItem) {
         showMessage(`Теперь ищи ${nextItem.name.toLowerCase()}`, "info");
       }
-    }, 600);
+    }, 800);
   }
 }
 
