@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>AR Детская Игра: Слова и Предметы</title>
   <link rel="stylesheet" href="styles.css" />
-  <!-- Шрифт для красоты -->
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;900&family=Comic+Neue:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -39,37 +38,26 @@
 
   <!-- ====== ИГРОВОЙ ЭКРАН ====== -->
   <div id="game" class="screen">
-    <!-- Видео с камеры -->
+    <!-- Видео с камеры (ПЕРВЫЙ слой) -->
     <video id="camera" autoplay playsinline></video>
 
-    <!-- Панель задания -->
+    <!-- Панель задания (ВТОРОЙ слой) -->
     <div id="task-panel">
-      <div id="task-text"></div>
+      <div id="task-text">Собери слово:</div>
       <div id="task-targets"></div>
     </div>
 
-    <!-- Компас-подсказка -->
-    <div id="compass">
-      <div class="compass-circle">
-        <div class="compass-arrow">↑</div>
-      </div>
-      <div class="compass-text">Ищи вокруг себя!</div>
-    </div>
-
-    <!-- Кнопка домой -->
-    <button id="home-btn">
+    <!-- Кнопка домой (ТРЕТИЙ слой) -->
+    <button id="home-btn" class="home-btn">
       <span class="home-icon">←</span>
       Меню
     </button>
 
-    <!-- Сообщения -->
+    <!-- Сообщения (ЧЕТВЁРТЫЙ слой) -->
     <div id="message"></div>
 
-    <!-- Контейнер для AR объектов -->
+    <!-- Контейнер для AR объектов (ПЯТЫЙ слой - самый верхний) -->
     <div id="ar-container"></div>
-
-    <!-- Элементы для эффектов -->
-    <div id="effects-container"></div>
   </div>
 
   <!-- ====== ЭКРАН ПОБЕДЫ ====== -->
@@ -87,20 +75,6 @@
     <div class="confetti"></div>
   </div>
 
-  <!-- Звуковые элементы (скрытые) -->
-  <audio id="sound-correct" preload="auto">
-    <source src="https://assets.mixkit.co/sfx/preview/mixkit-winning-chimes-2015.mp3" type="audio/mpeg">
-  </audio>
-  <audio id="sound-wrong" preload="auto">
-    <source src="https://assets.mixkit.co/sfx/preview/mixkit-wrong-answer-fail-notification-946.mp3" type="audio/mpeg">
-  </audio>
-  <audio id="sound-hover" preload="auto">
-    <source src="https://assets.mixkit.co/sfx/preview/mixkit-magic-sparkles-3009.mp3" type="audio/mpeg">
-  </audio>
-
-  <!-- Данные -->
-  <script type="module" src="data.js"></script>
-  <!-- Логика -->
   <script type="module" src="app.js"></script>
 </body>
 </html>
