@@ -15,12 +15,6 @@ const camera = document.getElementById("camera");
 const taskText = document.getElementById("task-text");
 const taskTargets = document.getElementById("task-targets");
 const message = document.getElementById("message");
-const arContainer = document.getElementById("ar-container");
-const effectsContainer = document.getElementById("effects-container");
-
-const soundCorrect = document.getElementById("sound-correct");
-const soundWrong = document.getElementById("sound-wrong");
-const soundHover = document.getElementById("sound-hover");
 
 /* ====== СОСТОЯНИЕ ====== */
 let mode = null;
@@ -28,7 +22,6 @@ let currentWord = "";
 let currentIndex = 0;
 let currentCategory = null;
 let collectedItems = [];
-let objects = [];
 let cameraStream = null;
 
 /* ====== ЭКРАНЫ ====== */
@@ -37,11 +30,9 @@ function showScreen(screen) {
   screen.classList.add("active");
 }
 
-/* ====== КАМЕРА (РАБОЧАЯ) ====== */
+/* ====== КАМЕРА ====== */
 async function startCamera() {
-  console.log("Запуск камеры...");
-
-  // Останавливаем предыдущую камеру если есть
+  // Останавливаем предыдущую камеру
   if (cameraStream) {
     cameraStream.getTracks().forEach(track => track.stop());
   }
@@ -49,192 +40,98 @@ async function startCamera() {
   try {
     cameraStream = await navigator.mediaDevices.getUserMedia({
       video: {
-        facingMode: "environment",
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
+        facingMode: "environment"  // Задняя камера
       },
       audio: false
     });
 
     camera.srcObject = cameraStream;
     camera.play();
+    camera.style.display = "block";
 
-    console.log("Камера запущена успешно!");
+    console.log("Камера запущена!");
     return true;
-
   } catch (error) {
-    console.error("ОШИБКА КАМЕРЫ:", error);
-
-    // Показываем ошибку пользователю
-    let errorMsg = "Не удалось запустить камеру. ";
-
-    if (error.name === 'NotAllowedError') {
-      errorMsg += "Разрешите доступ к камере в настройках браузера.";
-    } else if (error.name === 'NotFoundError') {
-      errorMsg += "Камера не найдена.";
-    } else if (error.name === 'NotReadableError') {
-      errorMsg += "Камера уже используется другим приложением.";
-    } else {
-      errorMsg += "Попробуйте перезагрузить страницу.";
-    }
-
-    alert(errorMsg);
-
-    // Фолбэк - чёрный фон
-    camera.style.display = "none";
-    gameScreen.style.background = "#000";
-
+    console.error("Ошибка камеры:", error);
+    alert("Не удалось запустить камеру. Разрешите доступ к камере.");
     return false;
   }
 }
 
-/* ====== ЭФФЕКТЫ ====== */
+/* ====== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====== */
 function showMessage(text, type = "info") {
   message.textContent = text;
-  message.className = "";
-  message.classList.add(type, "show");
+  message.className = type;
+  message.classList.add("show");
 
-  setTimeout(() => message.classList.remove("show"), 2000);
+  setTimeout(() => {
+    message.classList.remove("show");
+  }, 1500);
 }
 
-function playSound(sound) {
-  if (!sound) return;
-  try {
-    sound.currentTime = 0;
-    sound.play().catch(e => console.log("Звук не воспроизведён:", e));
-  } catch (e) {
-    console.log("Ошибка звука:", e);
-  }
+function clearObjects() {
+  document.querySelectorAll(".ar-object").forEach(el => el.remove());
 }
 
-function createParticles(x, y, color = "#ffd700", count = 15) {
-  for (let i = 0; i < count; i++) {
-    const particle = document.createElement("div");
-    particle.style.cssText = `
-      position: absolute;
-      width: 8px;
-      height: 8px;
-      background: ${color};
-      border-radius: 50%;
-      left: ${x}px;
-      top: ${y}px;
-      pointer-events: none;
-      z-index: 1000;
-    `;
-
-    effectsContainer.appendChild(particle);
-
-    const angle = Math.random() * Math.PI * 2;
-    const distance = 30 + Math.random() * 70;
-    const tx = Math.cos(angle) * distance;
-    const ty = Math.sin(angle) * distance;
-
-    particle.animate([
-      { transform: 'translate(0, 0) scale(1)', opacity: 1 },
-      { transform: `translate(${tx}px, ${ty}px) scale(0)`, opacity: 0 }
-    ], {
-      duration: 800,
-      easing: 'ease-out'
-    });
-
-    setTimeout(() => particle.remove(), 800);
-  }
-}
-
-function createSparkle(element) {
-  const rect = element.getBoundingClientRect();
-  createParticles(rect.left + rect.width/2, rect.top + rect.height/2, "#00ffaa", 8);
-}
-
-/* ====== СОЗДАНИЕ AR ОБЪЕКТОВ ====== */
+/* ====== СОЗДАНИЕ ОБЪЕКТОВ ====== */
 function createObject(content, isCorrect, index) {
   const obj = document.createElement("div");
   obj.className = "ar-object";
   obj.textContent = content;
   obj.dataset.correct = isCorrect;
 
-  // Разные позиции на экране
-  const positions = [
-    { left: "15%", top: "30%" },
-    { left: "50%", top: "60%" },
-    { left: "75%", top: "35%" }
-  ];
+  // Позиции объектов (по кругу)
+  const angle = (index * 120) * Math.PI / 180;
+  const radius = Math.min(window.innerWidth, window.innerHeight) * 0.3;
+  const centerX = window.innerWidth / 2;
+  const centerY = window.innerHeight / 2;
 
-  const pos = positions[index % positions.length];
-  obj.style.left = pos.left;
-  obj.style.top = pos.top;
+  const x = centerX + Math.cos(angle) * radius - 50;
+  const y = centerY + Math.sin(angle) * radius - 50;
+
+  obj.style.left = x + "px";
+  obj.style.top = y + "px";
 
   // Анимация появления
   obj.style.opacity = "0";
-  obj.style.transform = "scale(0) rotate(-180deg)";
-
-  // Наведение
-  obj.addEventListener("mouseenter", () => {
-    if (!obj.classList.contains("highlighted")) {
-      obj.classList.add("highlighted");
-      playSound(soundHover);
-      createSparkle(obj);
-    }
-  });
-
-  obj.addEventListener("mouseleave", () => {
-    obj.classList.remove("highlighted");
-  });
+  obj.style.transform = "scale(0)";
 
   // Клик
-  obj.addEventListener("click", (e) => {
-    e.stopPropagation();
+  obj.addEventListener("click", () => {
     handleObjectClick(obj, isCorrect);
   });
 
-  // Для мобильных
-  obj.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    obj.classList.add("highlighted");
-    playSound(soundHover);
-    createSparkle(obj);
-  });
+  gameScreen.appendChild(obj);
 
-  obj.addEventListener("touchend", (e) => {
-    e.preventDefault();
-    handleObjectClick(obj, isCorrect);
-  });
-
-  arContainer.appendChild(obj);
-  objects.push(obj);
-
-  // Анимация появления
+  // Появление с задержкой
   setTimeout(() => {
-    obj.style.transition = "opacity 0.5s ease, transform 0.5s ease";
+    obj.style.transition = "opacity 0.3s, transform 0.3s";
     obj.style.opacity = "1";
-    obj.style.transform = "scale(1) rotate(0deg)";
-  }, 100 + index * 200);
+    obj.style.transform = "scale(1)";
+  }, 100);
 
   return obj;
 }
 
 function handleObjectClick(obj, isCorrect) {
-  const rect = obj.getBoundingClientRect();
-
   if (isCorrect) {
-    // ПРАВИЛЬНО
-    playSound(soundCorrect);
-    showMessage("Верно! Отлично!", "success");
-    createParticles(rect.left + rect.width/2, rect.top + rect.height/2, "#2ecc71", 20);
+    // Правильный выбор
+    showMessage("Верно!", "success");
 
-    // Полёт к цели
+    // Анимация полёта
     const targetIndex = mode === "words" ? currentIndex : collectedItems.length;
     const target = taskTargets.children[targetIndex];
 
     if (target) {
       const targetRect = target.getBoundingClientRect();
-      const targetX = targetRect.left + targetRect.width/2 - rect.left;
-      const targetY = targetRect.top + targetRect.height/2 - rect.top;
+      const objRect = obj.getBoundingClientRect();
 
-      obj.style.transition = "transform 0.8s cubic-bezier(0.5, 0, 0.5, 1), opacity 0.8s";
-      obj.style.transform = `translate(${targetX}px, ${targetY}px) scale(0.1)`;
+      const targetX = targetRect.left + targetRect.width/2 - objRect.left;
+      const targetY = targetRect.top + targetRect.height/2 - objRect.top;
+
+      obj.style.transition = "transform 0.5s, opacity 0.5s";
+      obj.style.transform = `translate(${targetX}px, ${targetY}px) scale(0)`;
       obj.style.opacity = "0";
-      obj.style.zIndex = "1000";
     }
 
     setTimeout(() => {
@@ -244,30 +141,20 @@ function handleObjectClick(obj, isCorrect) {
       } else {
         handleCorrectItem();
       }
-    }, 800);
+    }, 500);
 
   } else {
-    // НЕПРАВИЛЬНО
-    playSound(soundWrong);
-    showMessage("Это не то, что нужно!", "error");
-    createParticles(rect.left + rect.width/2, rect.top + rect.height/2, "#e74c3c", 10);
+    // Неправильный выбор
+    showMessage("Не та буква!", "error");
 
-    obj.style.transition = "transform 0.5s, opacity 0.5s";
-    obj.style.transform = "scale(0.5) rotate(180deg)";
+    obj.style.transition = "transform 0.3s, opacity 0.3s";
+    obj.style.transform = "scale(0)";
     obj.style.opacity = "0";
 
     setTimeout(() => {
       if (obj.parentNode) obj.remove();
-    }, 500);
+    }, 300);
   }
-}
-
-function clearObjects() {
-  objects.forEach(obj => {
-    if (obj.parentNode) obj.remove();
-  });
-  objects = [];
-  arContainer.innerHTML = "";
 }
 
 /* ====== РЕЖИМ СЛОВА ====== */
@@ -276,8 +163,10 @@ function startWordsGame() {
   currentWord = WORDS[Math.floor(Math.random() * WORDS.length)];
   currentIndex = 0;
 
-  taskText.textContent = "Собери слово:";
+  // Задание
+  taskText.textContent = `Слово: ${currentWord}`;
 
+  // Цели
   taskTargets.innerHTML = "";
   for (let i = 0; i < currentWord.length; i++) {
     const span = document.createElement("span");
@@ -286,7 +175,6 @@ function startWordsGame() {
     taskTargets.appendChild(span);
   }
 
-  showMessage(`Найди букву "${currentWord[0]}"!`, "info");
   spawnLetterObjects();
 }
 
@@ -326,8 +214,7 @@ function handleCorrectLetter() {
   } else {
     setTimeout(() => {
       spawnLetterObjects();
-      showMessage(`Теперь найди букву "${currentWord[currentIndex]}"`, "info");
-    }, 500);
+    }, 300);
   }
 }
 
@@ -344,11 +231,9 @@ function startItemsGame() {
     const span = document.createElement("span");
     span.className = "target-item";
     span.textContent = item.emoji;
-    span.title = item.name;
     taskTargets.appendChild(span);
   });
 
-  showMessage(`Найди ${currentCategory.items[0].name.toLowerCase()}!`, "info");
   spawnItemObjects();
 }
 
@@ -379,7 +264,6 @@ function spawnItemObjects() {
 
     if (!items.some(i => i.name === randomItem.name)) {
       items.push(randomItem);
-      allItems.splice(randomIndex, 1);
     }
   }
 
@@ -414,31 +298,21 @@ function handleCorrectItem() {
   } else {
     setTimeout(() => {
       spawnItemObjects();
-      const nextItem = currentCategory.items.find(item =>
-        !collectedItems.some(collected => collected.name === item.name)
-      );
-      if (nextItem) {
-        showMessage(`Теперь найди ${nextItem.name.toLowerCase()}!`, "info");
-      }
-    }, 500);
+    }, 300);
   }
 }
 
 /* ====== КНОПКИ ====== */
 wordsBtn.addEventListener("click", async () => {
   showScreen(gameScreen);
-  const cameraOk = await startCamera();
-  if (cameraOk) {
-    setTimeout(() => startWordsGame(), 500);
-  }
+  await startCamera();
+  setTimeout(() => startWordsGame(), 300);
 });
 
 itemsBtn.addEventListener("click", async () => {
   showScreen(gameScreen);
-  const cameraOk = await startCamera();
-  if (cameraOk) {
-    setTimeout(() => startItemsGame(), 500);
-  }
+  await startCamera();
+  setTimeout(() => startItemsGame(), 300);
 });
 
 homeBtn.addEventListener("click", () => {
@@ -465,19 +339,5 @@ backMenuBtn.addEventListener("click", () => {
   }
 });
 
-/* ====== КЛИК ПО КАМЕРЕ ====== */
-gameScreen.addEventListener("click", (e) => {
-  if (e.target === camera || e.target === gameScreen) {
-    showMessage("Нажимай на буквы и предметы на экране!", "info");
-  }
-});
-
-/* ====== АДАПТАЦИЯ ПОД МОБИЛЬНЫЕ ====== */
-document.addEventListener('touchmove', (e) => {
-  if (e.target === camera || e.target === gameScreen) {
-    e.preventDefault();
-  }
-}, { passive: false });
-
 /* ====== ЗАПУСК ====== */
-console.log("AR игра с камерой и эффектами загружена!");
+console.log("Игра загружена");
