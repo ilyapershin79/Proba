@@ -88,14 +88,14 @@ function createVirtualObjects(contents, correctIndex) {
   });
   virtualObjects = [];
 
-  // 6 разных мест В МИРЕ - каждый в своем направлении
+  // 6 объектов в РАЗНЫХ направлениях МИРА
   const positions = [
-    { direction: "left", x: -30, y: 0 },     // СЛЕВА
-    { direction: "right", x: 30, y: 0 },     // СПРАВА
-    { direction: "up", x: 0, y: 25 },        // СВЕРХУ
-    { direction: "down", x: 0, y: -20 },     // СНИЗУ
-    { direction: "left-up", x: -20, y: 15 }, // СЛЕВА-СВЕРХУ
-    { direction: "right-down", x: 20, y: -15 } // СПРАВА-СНИЗУ
+    { direction: "left", id: 0 },
+    { direction: "right", id: 1 },
+    { direction: "up", id: 2 },
+    { direction: "down", id: 3 },
+    { direction: "left-up", id: 4 },
+    { direction: "right-down", id: 5 }
   ];
 
   contents.forEach((content, index) => {
@@ -103,7 +103,7 @@ function createVirtualObjects(contents, correctIndex) {
       id: `obj_${Date.now()}_${index}`,
       content: content,
       isCorrect: index === correctIndex,
-      position: positions[index], // Фиксированная позиция в мире
+      position: positions[index], // Направление в мире
       element: null,
       isVisible: false
     };
@@ -138,59 +138,74 @@ function updateObjectsPosition() {
   virtualObjects.forEach(obj => {
     if (!obj.element) return;
 
-    // КАЖДЫЙ ОБЪЕКТ В СВОЕМ МЕСТЕ МИРА
-    // Объект виден ТОЛЬКО когда телефон смотрит в его сторону
-
     let isVisible = false;
     let screenX = 50;
     let screenY = 50;
 
-    // Определяем видимость по направлению объекта
+    // КАЖДЫЙ ОБЪЕКТ В СВОЕМ НАПРАВЛЕНИИ МИРА
     switch(obj.position.direction) {
-      case "left": // Объект СЛЕВА
-        isVisible = deviceGamma < -20; // Телефон повернут влево
-        screenX = 30; // Показываем слева на экране
-        screenY = 50;
+      case "left":
+        // Объект СЛЕВА - виден когда телефон повернут влево
+        if (deviceGamma < -15) {
+          isVisible = true;
+          // Чем больше поворот влево, тем объект ближе к центру
+          // deviceGamma от -15 до -90, переводим в 35..65%
+          screenX = 50 - (deviceGamma * 0.4);
+          screenY = 50;
+        }
         break;
 
-      case "right": // Объект СПРАВА
-        isVisible = deviceGamma > 20; // Телефон повернут вправо
-        screenX = 70; // Показываем справа на экране
-        screenY = 50;
+      case "right":
+        // Объект СПРАВА - виден когда телефон повернут вправо
+        if (deviceGamma > 15) {
+          isVisible = true;
+          screenX = 50 - (deviceGamma * 0.4);
+          screenY = 50;
+        }
         break;
 
-      case "up": // Объект СВЕРХУ
-        isVisible = deviceBeta < 70; // Телефон смотрит вверх
-        screenX = 50;
-        screenY = 30; // Показываем вверху на экране
+      case "up":
+        // Объект СВЕРХУ - виден когда телефон смотрит вверх
+        if (deviceBeta < 75) {
+          isVisible = true;
+          screenX = 50;
+          screenY = 50 - ((deviceBeta - 90) * 0.5);
+        }
         break;
 
-      case "down": // Объект СНИЗУ
-        isVisible = deviceBeta > 110; // Телефон смотрит вниз
-        screenX = 50;
-        screenY = 70; // Показываем внизу на экране
+      case "down":
+        // Объект СНИЗУ - виден когда телефон смотрит вниз
+        if (deviceBeta > 105) {
+          isVisible = true;
+          screenX = 50;
+          screenY = 50 - ((deviceBeta - 90) * 0.5);
+        }
         break;
 
-      case "left-up": // Объект СЛЕВА-СВЕРХУ
-        isVisible = deviceGamma < -10 && deviceBeta < 80;
-        screenX = 35;
-        screenY = 35;
+      case "left-up":
+        // Объект СЛЕВА-СВЕРХУ
+        if (deviceGamma < -10 && deviceBeta < 80) {
+          isVisible = true;
+          screenX = 50 - (deviceGamma * 0.3);
+          screenY = 50 - ((deviceBeta - 90) * 0.4);
+        }
         break;
 
-      case "right-down": // Объект СПРАВА-СНИЗУ
-        isVisible = deviceGamma > 10 && deviceBeta > 100;
-        screenX = 65;
-        screenY = 65;
+      case "right-down":
+        // Объект СПРАВА-СНИЗУ
+        if (deviceGamma > 10 && deviceBeta > 100) {
+          isVisible = true;
+          screenX = 50 - (deviceGamma * 0.3);
+          screenY = 50 - ((deviceBeta - 90) * 0.4);
+        }
         break;
     }
 
-    // Проверяем, в центре ли экрана
-    const isInCenter =
-      Math.abs(screenX - 50) < 15 &&
-      Math.abs(screenY - 50) < 15;
+    // Объект в центре экрана?
+    const isInCenter = Math.abs(screenX - 50) < 12 && Math.abs(screenY - 50) < 12;
 
+    // ПОКАЗЫВАЕМ объект
     if (isVisible && !obj.isVisible) {
-      // ПОЯВЛЕНИЕ объекта (повернули телефон в его сторону)
       obj.isVisible = true;
       obj.element.style.transition = "opacity 0.5s, transform 0.5s, left 0.3s, top 0.3s";
       obj.element.style.opacity = "1";
@@ -199,17 +214,17 @@ function updateObjectsPosition() {
 
       obj.element.style.left = `${screenX}%`;
       obj.element.style.top = `${screenY}%`;
-
-    } else if (!isVisible && obj.isVisible) {
-      // ИСЧЕЗНОВЕНИЕ объекта (отвернули телефон)
+    }
+    // СКРЫВАЕМ объект
+    else if (!isVisible && obj.isVisible) {
       obj.isVisible = false;
       obj.element.style.transition = "opacity 0.3s, transform 0.3s";
       obj.element.style.opacity = "0";
       obj.element.style.transform = "scale(0)";
       obj.element.classList.remove("visible", "highlighted");
-
-    } else if (isVisible && obj.isVisible) {
-      // Обновляем позицию на экране
+    }
+    // ДВИГАЕМ объект (плавно следим)
+    else if (isVisible && obj.isVisible) {
       obj.element.style.transition = "left 0.2s, top 0.2s";
       obj.element.style.left = `${screenX}%`;
       obj.element.style.top = `${screenY}%`;
@@ -315,7 +330,7 @@ function spawnLetterObjects() {
   // Перемешиваем
   letters.sort(() => Math.random() - 0.5);
 
-  // Находим индекс правильной буква
+  // Находим индекс правильной буквы
   const correctIndex = letters.findIndex(l => l === correctLetter);
 
   // Создаём виртуальные объекты
