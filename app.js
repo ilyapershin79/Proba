@@ -88,14 +88,14 @@ function createVirtualObjects(contents, correctIndex) {
   });
   virtualObjects = [];
 
-  // 6 СОВЕРШЕННО РАЗНЫХ мест В МИРЕ
+  // 6 разных мест В МИРЕ - каждый в своем направлении
   const positions = [
-    { x: -25, y: 5, z: 10 },     // ДАЛЕКО слева-вверху
-    { x: 25, y: -5, z: 10 },     // ДАЛЕКО справа-внизу
-    { x: -5, y: 20, z: 8 },      // ОЧЕНЬ ВЫСОКО сверху
-    { x: 15, y: -15, z: 12 },    // Справа-ОЧЕНЬ низко
-    { x: -20, y: -10, z: 14 },   // Слева-внизу
-    { x: 10, y: 15, z: 16 }      // Справа-вверху
+    { direction: "left", x: -30, y: 0 },     // СЛЕВА
+    { direction: "right", x: 30, y: 0 },     // СПРАВА
+    { direction: "up", x: 0, y: 25 },        // СВЕРХУ
+    { direction: "down", x: 0, y: -20 },     // СНИЗУ
+    { direction: "left-up", x: -20, y: 15 }, // СЛЕВА-СВЕРХУ
+    { direction: "right-down", x: 20, y: -15 } // СПРАВА-СНИЗУ
   ];
 
   contents.forEach((content, index) => {
@@ -118,6 +118,8 @@ function createVirtualObjects(contents, correctIndex) {
     // Начально скрыт
     element.style.opacity = "0";
     element.style.transform = "scale(0)";
+    element.style.left = "50%";
+    element.style.top = "50%";
 
     // Клик
     element.addEventListener("click", () => {
@@ -136,24 +138,61 @@ function updateObjectsPosition() {
   virtualObjects.forEach(obj => {
     if (!obj.element) return;
 
-    // ОБЪЕКТЫ В МИРОВЫХ КООРДИНАТАХ
-    // Когда телефон поворачивается, мы ВЫЧИТАЕМ поворот из позиции
-    const screenX = 50 + obj.position.x - (deviceGamma * 0.5);
-    const screenY = 50 + obj.position.y - ((deviceBeta - 90) * 0.5);
+    // КАЖДЫЙ ОБЪЕКТ В СВОЕМ МЕСТЕ МИРА
+    // Объект виден ТОЛЬКО когда телефон смотрит в его сторону
 
-    // Объект виден только если он в пределах поля зрения
-    const isVisible =
-      screenX > 5 && screenX < 95 &&
-      screenY > 10 && screenY < 90;
+    let isVisible = false;
+    let screenX = 50;
+    let screenY = 50;
+
+    // Определяем видимость по направлению объекта
+    switch(obj.position.direction) {
+      case "left": // Объект СЛЕВА
+        isVisible = deviceGamma < -20; // Телефон повернут влево
+        screenX = 30; // Показываем слева на экране
+        screenY = 50;
+        break;
+
+      case "right": // Объект СПРАВА
+        isVisible = deviceGamma > 20; // Телефон повернут вправо
+        screenX = 70; // Показываем справа на экране
+        screenY = 50;
+        break;
+
+      case "up": // Объект СВЕРХУ
+        isVisible = deviceBeta < 70; // Телефон смотрит вверх
+        screenX = 50;
+        screenY = 30; // Показываем вверху на экране
+        break;
+
+      case "down": // Объект СНИЗУ
+        isVisible = deviceBeta > 110; // Телефон смотрит вниз
+        screenX = 50;
+        screenY = 70; // Показываем внизу на экране
+        break;
+
+      case "left-up": // Объект СЛЕВА-СВЕРХУ
+        isVisible = deviceGamma < -10 && deviceBeta < 80;
+        screenX = 35;
+        screenY = 35;
+        break;
+
+      case "right-down": // Объект СПРАВА-СНИЗУ
+        isVisible = deviceGamma > 10 && deviceBeta > 100;
+        screenX = 65;
+        screenY = 65;
+        break;
+    }
 
     // Проверяем, в центре ли экрана
     const isInCenter =
-      Math.abs(screenX - 50) < 10 &&
-      Math.abs(screenY - 50) < 10;
+      Math.abs(screenX - 50) < 15 &&
+      Math.abs(screenY - 50) < 15;
 
     if (isVisible && !obj.isVisible) {
+      // ПОЯВЛЕНИЕ объекта (повернули телефон в его сторону)
       obj.isVisible = true;
-      obj.element.style.transition = "opacity 0.5s, transform 0.5s";
+      obj.element.style.transition = "opacity 0.5s, transform 0.5s, left 0.3s, top 0.3s";
       obj.element.style.opacity = "1";
       obj.element.style.transform = "scale(1)";
       obj.element.classList.add("visible");
@@ -162,6 +201,7 @@ function updateObjectsPosition() {
       obj.element.style.top = `${screenY}%`;
 
     } else if (!isVisible && obj.isVisible) {
+      // ИСЧЕЗНОВЕНИЕ объекта (отвернули телефон)
       obj.isVisible = false;
       obj.element.style.transition = "opacity 0.3s, transform 0.3s";
       obj.element.style.opacity = "0";
@@ -169,11 +209,13 @@ function updateObjectsPosition() {
       obj.element.classList.remove("visible", "highlighted");
 
     } else if (isVisible && obj.isVisible) {
+      // Обновляем позицию на экране
       obj.element.style.transition = "left 0.2s, top 0.2s";
       obj.element.style.left = `${screenX}%`;
       obj.element.style.top = `${screenY}%`;
     }
 
+    // Выделение если объект в центре
     if (isInCenter && obj.isVisible) {
       obj.element.classList.add("highlighted");
     } else {
@@ -273,7 +315,7 @@ function spawnLetterObjects() {
   // Перемешиваем
   letters.sort(() => Math.random() - 0.5);
 
-  // Находим индекс правильной буквы
+  // Находим индекс правильной буква
   const correctIndex = letters.findIndex(l => l === correctLetter);
 
   // Создаём виртуальные объекты
