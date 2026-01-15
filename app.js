@@ -22,113 +22,51 @@ let currentWord = "";
 let currentIndex = 0;
 let currentCategory = null;
 let collectedItems = [];
-let isGameActive = false;
 
 /* ====== ГИРОСКОП ====== */
-let deviceGamma = 0; // Наклон влево/вправо
-let deviceBeta = 90; // Наклон вперед/назад
-let deviceAlpha = 0; // Поворот вокруг оси
+let deviceGamma = 0; // Наклон влево/вправо (-90 до 90)
+let deviceBeta = 90; // Наклон вперед/назад (0 до 180)
 
 /* ====== ВИРТУАЛЬНЫЕ ОБЪЕКТЫ ====== */
 let virtualObjects = [];
-let objectPositions = [];
 
 /* ====== ЭКРАНЫ ====== */
 function showScreen(screen) {
-  [menuScreen, gameScreen, winScreen].forEach(s => {
-    s.classList.remove("active");
-    s.style.display = "none";
-  });
+  [menuScreen, gameScreen, winScreen].forEach(s => s.classList.remove("active"));
   screen.classList.add("active");
-  screen.style.display = "flex";
 }
 
 /* ====== КАМЕРА ====== */
 async function startCamera() {
   try {
-    // Останавливаем предыдущую камеру если была
-    if (camera.srcObject) {
-      camera.srcObject.getTracks().forEach(track => track.stop());
-    }
-
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: "environment",
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      },
+      video: { facingMode: "environment" },
       audio: false
     });
-
     camera.srcObject = stream;
-    camera.play();
-
-    return new Promise((resolve) => {
-      camera.onloadedmetadata = () => {
-        console.log("Камера работает, разрешение:", camera.videoWidth, "x", camera.videoHeight);
-        resolve(true);
-      };
-
-      camera.onerror = () => {
-        console.error("Ошибка загрузки видео");
-        resolve(false);
-      };
-    });
+    console.log("Камера работает");
+    return true;
   } catch (err) {
     console.error("Ошибка камеры:", err);
-    showMessage("Разрешите доступ к камере!", "error");
+    alert("Разрешите доступ к камере!");
     return false;
   }
 }
 
 /* ====== ГИРОСКОП ====== */
 function startGyroscope() {
-  if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
-    // iOS 13+
-    DeviceOrientationEvent.requestPermission()
-      .then(permissionState => {
-        if (permissionState === 'granted') {
-          window.addEventListener('deviceorientation', handleOrientation);
-          console.log("Гироскоп разрешён на iOS");
-        } else {
-          console.log("Гироскоп не разрешён");
-          useFallbackGyro();
-        }
-      })
-      .catch(console.error);
-  } else if (window.DeviceOrientationEvent) {
-    // Android и другие
-    window.addEventListener('deviceorientation', handleOrientation);
-    console.log("Гироскоп запущен");
-  } else {
-    console.log("Гироскоп не поддерживается");
-    useFallbackGyro();
-  }
-}
-
-function handleOrientation(event) {
-  if (!isGameActive) return;
-
-  deviceGamma = event.gamma || 0; // -90..90 (влево/вправо)
-  deviceBeta = event.beta || 90;   // -180..180 (вперёд/назад)
-  deviceAlpha = event.alpha || 0;  // 0..360 (поворот)
-
-  updateObjectsPosition();
-}
-
-function useFallbackGyro() {
-  console.log("Используем эмуляцию гироскопа для теста");
-
-  // Для теста на компьютере - управление мышкой
-  if (window.innerWidth > 768) {
-    document.addEventListener('mousemove', (e) => {
-      if (!isGameActive) return;
-
-      deviceGamma = ((e.clientX / window.innerWidth) * 180) - 90;
-      deviceBeta = ((e.clientY / window.innerHeight) * 180) - 90;
-
+  if (window.DeviceOrientationEvent) {
+    window.addEventListener("deviceorientation", (event) => {
+      deviceGamma = event.gamma || 0; // -90..90
+      deviceBeta = event.beta || 90;   // 0..180
       updateObjectsPosition();
     });
+    console.log("Гироскоп работает");
+  } else {
+    console.log("Гироскоп не поддерживается");
+    // Для теста на компьютере
+    deviceGamma = 0;
+    deviceBeta = 90;
   }
 }
 
@@ -137,25 +75,7 @@ function showMessage(text, type = "info") {
   message.textContent = text;
   message.className = type;
   message.classList.add("show");
-
-  setTimeout(() => {
-    message.classList.remove("show");
-  }, 2500);
-}
-
-/* ====== СОЗДАНИЕ ПОЗИЦИЙ ДЛЯ ОБЪЕКТОВ ====== */
-function generateObjectPositions() {
-  // 6 разных позиций вокруг пользователя
-  return [
-    { x: -8, y: 0, z: 5 },   // Слева
-    { x: 8, y: 0, z: 5 },    // Справа
-    { x: 0, y: 6, z: 4 },    // Сверху
-    { x: 0, y: -4, z: 6 },   // Снизу
-    { x: -5, y: 3, z: 7 },   // Слева-сверху
-    { x: 5, y: -2, z: 8 },   // Справа-снизу
-    { x: -6, y: -3, z: 5 },  // Слева-снизу
-    { x: 6, y: 3, z: 6 }     // Справа-сверху
-  ];
+  setTimeout(() => message.classList.remove("show"), 2000);
 }
 
 /* ====== ВИРТУАЛЬНЫЕ ОБЪЕКТЫ ====== */
@@ -168,42 +88,40 @@ function createVirtualObjects(contents, correctIndex) {
   });
   virtualObjects = [];
 
-  // Генерируем новые позиции
-  objectPositions = generateObjectPositions();
-
-  // Перемешиваем позиции
-  const shuffledPositions = [...objectPositions].sort(() => Math.random() - 0.5);
+  // 6 разных мест В МИРОВЫХ КООРДИНАТАХ (статические!)
+  const positions = [
+    { x: -15, y: 0, z: 10 },    // ДАЛЕКО слева
+    { x: 15, y: 0, z: 10 },     // ДАЛЕКО справа
+    { x: 0, y: 12, z: 8 },      // ДАЛЕКО сверху
+    { x: 0, y: -8, z: 12 },     // ДАЛЕКО снизу
+    { x: -10, y: 6, z: 14 },    // Слева-сверху
+    { x: 10, y: -4, z: 16 }     // Справа-снизу
+  ];
 
   contents.forEach((content, index) => {
     const obj = {
       id: `obj_${Date.now()}_${index}`,
       content: content,
       isCorrect: index === correctIndex,
-      position: shuffledPositions[index] || shuffledPositions[0],
+      position: positions[index], // Фиксированная позиция в мире
       element: null,
-      isVisible: false,
-      hasBeenClicked: false
+      isVisible: false
     };
 
     // Создаём DOM элемент
     const element = document.createElement("div");
     element.className = "ar-object";
     element.textContent = content;
-    element.dataset.id = obj.id;
     element.dataset.correct = obj.isCorrect;
+    element.dataset.id = obj.id;
 
     // Начально скрыт
     element.style.opacity = "0";
     element.style.transform = "scale(0)";
-    element.style.left = "50%";
-    element.style.top = "50%";
 
     // Клик
-    element.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (obj.hasBeenClicked) return;
-      obj.hasBeenClicked = true;
-      handleObjectClick(element, obj.isCorrect, obj.content);
+    element.addEventListener("click", () => {
+      handleObjectClick(element, obj.isCorrect);
     });
 
     gameScreen.appendChild(element);
@@ -211,58 +129,58 @@ function createVirtualObjects(contents, correctIndex) {
     virtualObjects.push(obj);
   });
 
-  // Первое обновление позиций
   updateObjectsPosition();
 }
 
 function updateObjectsPosition() {
-  if (!isGameActive || virtualObjects.length === 0) return;
-
   virtualObjects.forEach(obj => {
-    if (!obj.element || obj.hasBeenClicked) return;
+    if (!obj.element) return;
+
+    // КРИТИЧНО: позиция объекта в мировых координатах НЕ меняется
+    // Мы только меняем, КАК ЭТА позиция отображается на экране
+    // в зависимости от поворота телефона
 
     // Преобразуем мировые координаты в экранные
-    // deviceGamma влияет на горизонталь, deviceBeta на вертикаль
-    let screenX = 50 + (obj.position.x * 1.5) - (deviceGamma * 0.5);
-    let screenY = 50 + (obj.position.y * 1.2) - ((deviceBeta - 90) * 0.5);
+    // deviceGamma - наклон влево/вправо
+    // deviceBeta - наклон вперед/назад
 
-    // Ограничиваем границы экрана
-    screenX = Math.max(5, Math.min(95, screenX));
-    screenY = Math.max(10, Math.min(90, screenY));
+    // Когда телефон поворачивается, объект должен "уходить" в сторону
+    const screenX = 50 + (obj.position.x * 0.7) - (deviceGamma * 0.7);
+    const screenY = 50 + (obj.position.y * 0.6) - ((deviceBeta - 90) * 0.7);
 
-    // Объект виден если он в пределах экрана
-    const isVisible = true; // Всегда видим, если создан
+    // Объект виден только если он в пределах экрана
+    const isVisible =
+      screenX > 10 && screenX < 90 &&
+      screenY > 20 && screenY < 80;
 
     // Проверяем, в центре ли экрана (для выделения)
-    const distanceToCenter = Math.sqrt(
-      Math.pow(screenX - 50, 2) + Math.pow(screenY - 50, 2)
-    );
-    const isInCenter = distanceToCenter < 20; // 20% от центра
+    const isInCenter =
+      Math.abs(screenX - 50) < 15 &&
+      Math.abs(screenY - 50) < 15;
 
     if (isVisible && !obj.isVisible) {
-      // ПОЯВЛЕНИЕ объекта
+      // ПОЯВЛЕНИЕ объекта (повернули телефон в его сторону)
       obj.isVisible = true;
-      obj.element.style.transition = "opacity 0.6s ease, transform 0.6s ease";
+      obj.element.style.transition = "opacity 0.5s, transform 0.5s";
       obj.element.style.opacity = "1";
       obj.element.style.transform = "scale(1)";
+      obj.element.classList.add("visible");
 
-      // Плавная установка позиции
-      requestAnimationFrame(() => {
-        obj.element.style.transition = "left 0.3s ease, top 0.3s ease";
-        obj.element.style.left = `${screenX}%`;
-        obj.element.style.top = `${screenY}%`;
-      });
+      // Устанавливаем позицию
+      obj.element.style.left = `${screenX}%`;
+      obj.element.style.top = `${screenY}%`;
 
     } else if (!isVisible && obj.isVisible) {
-      // ИСЧЕЗНОВЕНИЕ объекта
+      // ИСЧЕЗНОВЕНИЕ объекта (отвернули телефон)
       obj.isVisible = false;
-      obj.element.style.transition = "opacity 0.4s ease, transform 0.4s ease";
+      obj.element.style.transition = "opacity 0.3s, transform 0.3s";
       obj.element.style.opacity = "0";
       obj.element.style.transform = "scale(0)";
-      obj.element.classList.remove("highlighted");
+      obj.element.classList.remove("visible", "highlighted");
 
     } else if (isVisible && obj.isVisible) {
-      // Обновление позиции
+      // Обновляем позицию (плавно следим за объектом)
+      obj.element.style.transition = "left 0.1s, top 0.1s";
       obj.element.style.left = `${screenX}%`;
       obj.element.style.top = `${screenY}%`;
     }
@@ -276,7 +194,7 @@ function updateObjectsPosition() {
   });
 }
 
-function handleObjectClick(element, isCorrect, content) {
+function handleObjectClick(element, isCorrect) {
   if (!element.classList.contains("highlighted")) {
     showMessage("Наведи объект в центр экрана!", "error");
     return;
@@ -294,13 +212,12 @@ function handleObjectClick(element, isCorrect, content) {
       const targetRect = target.getBoundingClientRect();
       const elementRect = element.getBoundingClientRect();
 
-      const deltaX = (targetRect.left + targetRect.width/2) - (elementRect.left + elementRect.width/2);
-      const deltaY = (targetRect.top + targetRect.height/2) - (elementRect.top + elementRect.height/2);
-
-      element.style.transition = "transform 0.8s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.8s ease";
-      element.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0.1)`;
+      element.style.transition = "transform 0.8s cubic-bezier(0.5, 0, 0.5, 1), opacity 0.8s";
+      element.style.transform = `translate(
+        ${targetRect.left + targetRect.width/2 - elementRect.left}px,
+        ${targetRect.top + targetRect.height/2 - elementRect.top}px
+      ) scale(0.1)`;
       element.style.opacity = "0";
-      element.style.zIndex = "1000";
     }
 
     setTimeout(() => {
@@ -318,7 +235,7 @@ function handleObjectClick(element, isCorrect, content) {
     // НЕПРАВИЛЬНО
     showMessage("Это не то, что нужно!", "error");
 
-    element.style.transition = "transform 0.5s ease, opacity 0.5s ease";
+    element.style.transition = "transform 0.5s, opacity 0.5s";
     element.style.transform = "scale(0) rotate(180deg)";
     element.style.opacity = "0";
 
@@ -333,18 +250,20 @@ function handleObjectClick(element, isCorrect, content) {
 /* ====== РЕЖИМ "СЛОВА" ====== */
 function startWordsGame() {
   mode = "words";
-  isGameActive = true;
   currentWord = WORDS[Math.floor(Math.random() * WORDS.length)];
   currentIndex = 0;
 
-  // Маленькая панель задания
+  // МАЛЕНЬКАЯ ПАНЕЛЬ ЗАДАНИЯ
   taskText.textContent = `Собери слово:`;
-  taskTargets.innerHTML = "";
+  taskText.style.fontSize = "18px";
+  taskText.style.marginBottom = "5px";
 
+  taskTargets.innerHTML = "";
   for (let i = 0; i < currentWord.length; i++) {
     const span = document.createElement("span");
     span.className = "target-item";
     span.textContent = currentWord[i];
+    span.style.fontSize = "24px";
     taskTargets.appendChild(span);
   }
 
@@ -358,7 +277,7 @@ function spawnLetterObjects() {
   const letters = [correctLetter];
   while (letters.length < 3) {
     const randomLetter = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
-    if (!letters.includes(randomLetter) && randomLetter !== correctLetter) {
+    if (!letters.includes(randomLetter)) {
       letters.push(randomLetter);
     }
   }
@@ -385,7 +304,6 @@ function handleCorrectLetter() {
 
   if (currentIndex >= currentWord.length) {
     // Слово собрано
-    isGameActive = false;
     setTimeout(() => {
       showScreen(winScreen);
     }, 1000);
@@ -394,25 +312,27 @@ function handleCorrectLetter() {
     setTimeout(() => {
       spawnLetterObjects();
       showMessage(`Теперь ищи букву "${currentWord[currentIndex]}"`, "info");
-    }, 600);
+    }, 500);
   }
 }
 
 /* ====== РЕЖИМ "ПРЕДМЕТЫ" ====== */
 function startItemsGame() {
   mode = "items";
-  isGameActive = true;
   currentCategory = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
   collectedItems = [];
 
-  // Панель задания
+  // ПАНЕЛЬ ЗАДАНИЯ С ВОПРОСОМ
   taskText.textContent = currentCategory.question;
-  taskTargets.innerHTML = "";
+  taskText.style.fontSize = "18px";
+  taskText.style.marginBottom = "5px";
 
+  taskTargets.innerHTML = "";
   currentCategory.items.forEach(item => {
     const span = document.createElement("span");
     span.className = "target-item";
     span.textContent = item.emoji;
+    span.style.fontSize = "24px";
     taskTargets.appendChild(span);
   });
 
@@ -428,31 +348,24 @@ function spawnItemObjects() {
 
   const correctItem = neededItems[0];
   const items = [correctItem];
+  const allItems = [];
 
-  // Собираем другие случайные предметы из других категорий
-  const allOtherItems = [];
   CATEGORIES.forEach(cat => {
-    if (cat.name !== currentCategory.name) {
-      cat.items.forEach(item => {
-        if (!items.some(i => i.name === item.name) &&
-            !collectedItems.some(col => col.name === item.name)) {
-          allOtherItems.push(item);
-        }
-      });
-    }
+    cat.items.forEach(item => {
+      if (!items.some(i => i.name === item.name)) {
+        allItems.push(item);
+      }
+    });
   });
 
-  // Добавляем случайные неправильные предметы
-  while (items.length < 3 && allOtherItems.length > 0) {
-    const randomIndex = Math.floor(Math.random() * allOtherItems.length);
-    const randomItem = allOtherItems[randomIndex];
+  while (items.length < 3 && allItems.length > 0) {
+    const randomIndex = Math.floor(Math.random() * allItems.length);
+    const randomItem = allItems[randomIndex];
     if (!items.some(i => i.name === randomItem.name)) {
       items.push(randomItem);
-      allOtherItems.splice(randomIndex, 1);
     }
   }
 
-  // Перемешиваем
   items.sort(() => Math.random() - 0.5);
 
   const contents = items.map(item => item.emoji);
@@ -479,8 +392,6 @@ function handleCorrectItem() {
   }
 
   if (collectedItems.length === currentCategory.items.length) {
-    // Все предметы собраны
-    isGameActive = false;
     setTimeout(() => {
       showScreen(winScreen);
     }, 1000);
@@ -493,14 +404,32 @@ function handleCorrectItem() {
       if (nextItem) {
         showMessage(`Теперь ищи ${nextItem.name.toLowerCase()}`, "info");
       }
-    }, 600);
+    }, 500);
   }
 }
 
-/* ====== ОЧИСТКА ИГРЫ ====== */
-function cleanupGame() {
-  isGameActive = false;
+/* ====== КНОПКИ ====== */
+wordsBtn.addEventListener("click", async () => {
+  showScreen(gameScreen);
+  const cameraOk = await startCamera();
+  if (cameraOk) {
+    startGyroscope();
+    setTimeout(() => startWordsGame(), 300);
+  }
+});
 
+itemsBtn.addEventListener("click", async () => {
+  showScreen(gameScreen);
+  const cameraOk = await startCamera();
+  if (cameraOk) {
+    startGyroscope();
+    setTimeout(() => startItemsGame(), 300);
+  }
+});
+
+// Кнопка домой ВНИЗУ
+homeBtn.addEventListener("click", () => {
+  showScreen(menuScreen);
   virtualObjects.forEach(obj => {
     if (obj.element && obj.element.parentNode) {
       obj.element.remove();
@@ -510,69 +439,28 @@ function cleanupGame() {
 
   if (camera.srcObject) {
     camera.srcObject.getTracks().forEach(track => track.stop());
-    camera.srcObject = null;
   }
-
-  // Убираем слушатели гироскопа
-  window.removeEventListener('deviceorientation', handleOrientation);
-  document.removeEventListener('mousemove', useFallbackGyro);
-}
-
-/* ====== КНОПКИ ====== */
-wordsBtn.addEventListener("click", async () => {
-  showScreen(gameScreen);
-  const cameraOk = await startCamera();
-  if (cameraOk) {
-    startGyroscope();
-    setTimeout(() => startWordsGame(), 500);
-  } else {
-    showScreen(menuScreen);
-  }
-});
-
-itemsBtn.addEventListener("click", async () => {
-  showScreen(gameScreen);
-  const cameraOk = await startCamera();
-  if (cameraOk) {
-    startGyroscope();
-    setTimeout(() => startItemsGame(), 500);
-  } else {
-    showScreen(menuScreen);
-  }
-});
-
-homeBtn.addEventListener("click", () => {
-  cleanupGame();
-  showScreen(menuScreen);
 });
 
 playAgainBtn.addEventListener("click", () => {
   showScreen(gameScreen);
-  cleanupGame();
-
-  setTimeout(async () => {
-    const cameraOk = await startCamera();
-    if (cameraOk) {
-      startGyroscope();
-      if (mode === "words") {
-        startWordsGame();
-      } else if (mode === "items") {
-        startItemsGame();
-      }
-    }
-  }, 300);
+  if (mode === "words") startWordsGame();
+  if (mode === "items") startItemsGame();
 });
 
 backMenuBtn.addEventListener("click", () => {
-  cleanupGame();
   showScreen(menuScreen);
+  virtualObjects.forEach(obj => {
+    if (obj.element && obj.element.parentNode) {
+      obj.element.remove();
+    }
+  });
+  virtualObjects = [];
+
+  if (camera.srcObject) {
+    camera.srcObject.getTracks().forEach(track => track.stop());
+  }
 });
 
 /* ====== ЗАПУСК ====== */
 console.log("AR игра 'Слова и предметы' загружена");
-
-// Автоматическое тестирование на ПК
-if (window.innerWidth > 768) {
-  console.log("Режим тестирования на ПК активирован");
-  console.log("Двигайте мышкой для имитации гироскопа");
-}
