@@ -145,7 +145,7 @@ html, body {
   height: 100%;
   object-fit: cover;
   z-index: 1;
-  transform: scaleX(-1); /* Зеркальное отображение для естественного вида */
+  transform: scaleX(-1);
 }
 
 /* ПАНЕЛЬ ЗАДАНИЯ - ВЕРХ */
@@ -199,6 +199,8 @@ html, body {
   border-radius: 8px;
   transition: all 0.3s ease;
   border: 1px solid rgba(255,255,255,0.2);
+  font-weight: 900;
+  -webkit-text-stroke: 1px rgba(0, 0, 0, 0.5);
 }
 
 .target-item.found {
@@ -212,6 +214,49 @@ html, body {
   0% { transform: scale(1); }
   50% { transform: scale(1.2); }
   100% { transform: scale(1.1); }
+}
+
+/* ПОДСКАЗКА ВНИЗУ */
+.hint-box {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 15px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 90;
+  border: 2px solid #ffd700;
+  backdrop-filter: blur(10px);
+  animation: pulseHint 2s infinite;
+  max-width: 90%;
+}
+
+@keyframes pulseHint {
+  0%, 100% { border-color: #ffd700; }
+  50% { border-color: #4ECDC4; }
+}
+
+.hint-icon {
+  font-size: 1.5rem;
+}
+
+.hint-text {
+  font-size: 1.1rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.hint-target {
+  color: #ffd700;
+  font-size: 1.3rem;
+  font-weight: 900;
+  text-shadow: 0 0 5px #ffd700;
+  margin-left: 5px;
 }
 
 /* КНОПКА ДОМОЙ - НИЗ */
@@ -246,7 +291,7 @@ html, body {
 /* СООБЩЕНИЯ */
 #message {
   position: absolute;
-  bottom: 80px;
+  bottom: 130px;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(0, 0, 0, 0.9);
@@ -309,9 +354,14 @@ html, body {
   justify-content: center;
   transition: all 0.3s ease;
   text-shadow: 0 2px 10px rgba(0,0,0,0.8);
-  filter: drop-shadow(0 0 10px rgba(255,255,255,0.4));
+  filter: drop-shadow(0 0 10px currentColor);
   animation: float 3s ease-in-out infinite;
   will-change: transform, opacity, left, top;
+  font-weight: 900;
+  -webkit-text-stroke: 2px rgba(0, 0, 0, 0.7);
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(5px);
 }
 
 @keyframes float {
@@ -321,20 +371,20 @@ html, body {
 
 .ar-object.highlighted {
   animation: float 3s ease-in-out infinite, glow 1s infinite alternate;
-  transform: scale(1.3) !important;
-  filter: drop-shadow(0 0 25px rgba(255,215,0,0.9));
+  transform: scale(1.4) !important;
+  filter: drop-shadow(0 0 25px currentColor);
   z-index: 85;
-  border: 3px solid rgba(255, 215, 0, 0.7);
-  border-radius: 20px;
-  background: rgba(255, 215, 0, 0.15);
+  border: 3px solid currentColor;
+  background: rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 30px currentColor;
 }
 
 @keyframes glow {
   from {
-    box-shadow: 0 0 10px #ffd700, 0 0 20px #ffd700;
+    box-shadow: 0 0 10px currentColor, 0 0 20px currentColor;
   }
   to {
-    box-shadow: 0 0 20px #ffd700, 0 0 30px #ff4b2b;
+    box-shadow: 0 0 20px currentColor, 0 0 30px rgba(255, 255, 255, 0.8);
   }
 }
 
@@ -464,8 +514,26 @@ html, body {
   #message {
     padding: 10px 16px;
     font-size: 0.95rem;
-    bottom: 70px;
+    bottom: 120px;
     max-width: 90%;
+  }
+
+  .hint-box {
+    bottom: 70px;
+    padding: 10px 16px;
+    max-width: 95%;
+  }
+
+  .hint-icon {
+    font-size: 1.3rem;
+  }
+
+  .hint-text {
+    font-size: 1rem;
+  }
+
+  .hint-target {
+    font-size: 1.1rem;
   }
 
   .win-content {
